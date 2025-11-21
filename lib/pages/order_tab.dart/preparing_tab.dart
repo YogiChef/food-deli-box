@@ -144,6 +144,7 @@ class _PreparingState extends State<Preparing> {
                   : totalPrice;
               final bool askme = orderData['askme'] ?? false;
               final String orderId = document.id;
+              final String buyerId = orderData['buyerId']?.toString() ?? '';
               // FIXED: Count actual pending items (exclude cancelled)
               final int pendingCount = items
                   .where((item) => !(item['askme'] ?? false))
@@ -159,6 +160,10 @@ class _PreparingState extends State<Preparing> {
               // Print items debug for index tracking
               print(
                 '=== DEBUG ITEMS INDEX === Order $orderId: rawLength=${itemsRaw.length}, filteredItems=${items.length} (hidden accepted), pendingCount=$pendingCount',
+              );
+              // FIXED: Debug print for buyer details (to check if fields exist in Firestore)
+              print(
+                '=== DEBUG BUYER DETAILS === Order $orderId: fullName="${orderData['fullName']}", address="${orderData['address']}", custphone="${orderData['custphone']}", custemail="${orderData['custemail']}", buyerImage="${orderData['buyerImage']}", buyerId="$buyerId"',
               );
               // Service badge
               final IconData serviceIcon = serviceType == 'delivery'
@@ -479,6 +484,9 @@ class _PreparingState extends State<Preparing> {
                                             ? newPendingSubTotal +
                                                   itShippingCharge
                                             : newPendingSubTotal;
+                                        // FIXED: Set deliveredAt to current time every time an item is accepted (latest approve time)
+                                        final Timestamp approveTime =
+                                            Timestamp.now();
                                         // NEW: Auto-move to delivered if all items accepted
                                         if (allAccepted) {
                                           orderDelivered = true;
@@ -488,14 +496,21 @@ class _PreparingState extends State<Preparing> {
                                                 'delivered', // Change to 'delivered' for Delivered page
                                             'totalPrice':
                                                 newTotalPrice, // Keep as 0 or original? Use original total for completed
+                                            'deliveredAt':
+                                                approveTime, // FIXED: Set delivered time for full delivery
                                           });
                                         } else {
                                           tx.update(docRef, {
                                             'items': itemsList,
                                             'totalPrice':
                                                 newTotalPrice, // Pending total
+                                            'deliveredAt':
+                                                approveTime, // FIXED: Set delivered time for partial (latest approve)
                                           });
                                         }
+                                        print(
+                                          '=== DEBUG APPROVE TIME SET === Order $orderId: deliveredAt = $approveTime',
+                                        );
                                       } else {
                                         throw Exception(
                                           'Invalid index $rawIndex',
@@ -784,157 +799,204 @@ class _PreparingState extends State<Preparing> {
                   ),
                 ),
               );
-              // เพิ่ม buyer details (vendor view)
-              expansionChildren.add(
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16.w),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.05),
-                    border: Border(
-                      top: BorderSide(color: Colors.orange.shade200),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Buyer Details',
-                        style: styles(
-                          fontSize: 14.sp,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black54,
-                        ),
+              // FIXED: Enhanced buyer details - Fallback to default avatar if buyerImage empty
+              final String orderEmail =
+                  orderData['custemail']?.toString() ?? '';
+              final String orderBuyerImage =
+                  orderData['buyerImage']?.toString() ?? ''; // From order
+              final String orderPhone =
+                  orderData['custphone']?.toString() ?? '';
+              final String orderAddress =
+                  orderData['address']?.toString() ?? '';
+              final String orderFullName =
+                  orderData['fullName']?.toString() ?? 'Unknown Buyer';
+
+              // Default avatar URL (ใช้ Gravatar หรือ placeholder)
+              final String defaultAvatarUrl =
+                  'https://ui-avatars.com/api/?name=${Uri.encodeComponent(orderFullName)}&background=ff6b35&color=fff&size=128'; // Dynamic default based on name
+
+              // Log order fields for quick check
+              print(
+                '=== DEBUG ORDER FIELDS === Order $orderId: email="$orderEmail", buyerImage="$orderBuyerImage" (default: $defaultAvatarUrl)',
+              );
+
+              Widget
+              buyerSection = FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                future: buyerId.isNotEmpty
+                    ? FirebaseFirestore.instance
+                          .collection('buyers')
+                          .doc(buyerId)
+                          .get()
+                    : null,
+                builder: (context, buyerSnapshot) {
+                  String email = orderEmail.isNotEmpty ? orderEmail : 'N/A';
+                  String buyerImageUrl =
+                      orderBuyerImage.isNotEmpty && orderBuyerImage != 'null'
+                      ? orderBuyerImage
+                      : defaultAvatarUrl; // FIXED: Fallback to dynamic default
+
+                  if (buyerSnapshot.connectionState == ConnectionState.done) {
+                    if (buyerSnapshot.hasError) {
+                      print(
+                        '=== DEBUG BUYER FETCH ERROR === Order $orderId: ${buyerSnapshot.error}',
+                      );
+                    } else if (buyerSnapshot.hasData &&
+                        buyerSnapshot.data!.exists) {
+                      final buyerData =
+                          buyerSnapshot.data!.data() ?? <String, dynamic>{};
+                      final String? buyerEmail = buyerData['email']?.toString();
+                      email = buyerEmail ?? email;
+                      final String? buyerDocImage = buyerData['image']
+                          ?.toString(); // Or 'profileImage'
+                      if (buyerDocImage != null &&
+                          buyerDocImage.isNotEmpty &&
+                          buyerDocImage != 'null') {
+                        buyerImageUrl = buyerDocImage; // Prefer doc if valid
+                      } else if (orderBuyerImage.isEmpty) {
+                        buyerImageUrl =
+                            defaultAvatarUrl; // Use default if both empty
+                      }
+                      print(
+                        '=== DEBUG BUYER FETCH SUCCESS === Order $orderId: email="$email", buyerImage="$buyerImageUrl" (from doc: "$buyerDocImage")',
+                      );
+                    } else {
+                      print(
+                        '=== DEBUG BUYER NOT FOUND === Order $orderId - Using order/default: email="$orderEmail", buyerImage="$buyerImageUrl"',
+                      );
+                      if (orderBuyerImage.isEmpty) {
+                        buyerImageUrl = defaultAvatarUrl;
+                      }
+                    }
+                  } else if (orderBuyerImage.isEmpty) {
+                    buyerImageUrl =
+                        defaultAvatarUrl; // While loading, use default
+                  }
+
+                  return Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(16.w),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.05),
+                      border: Border(
+                        top: BorderSide(color: Colors.orange.shade200),
                       ),
-                      SizedBox(height: 8.h),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            radius: 20.r,
-                            backgroundImage:
-                                orderData['buyerImage']
-                                        ?.toString()
-                                        .isNotEmpty ==
-                                    true
-                                ? NetworkImage(
-                                    orderData['buyerImage'].toString(),
-                                  )
-                                : null,
-                            child:
-                                orderData['buyerImage']?.toString().isEmpty !=
-                                    false
-                                ? Icon(
-                                    Icons.person,
-                                    size: 20.r,
-                                    color: Colors.grey,
-                                  )
-                                : null,
-                            backgroundColor:
-                                Colors.grey.shade200, // Default bg if no image
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Buyer Details',
+                          style: styles(
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black54,
                           ),
-                          SizedBox(width: 12.w),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  orderData['fullName']?.toString() ??
-                                      'Unknown Buyer',
-                                  style: styles(
-                                    fontSize: 14.sp,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black54,
-                                  ),
-                                ),
-                                if (orderData['address']
-                                        ?.toString()
-                                        .isNotEmpty ==
-                                    true) ...[
-                                  SizedBox(height: 4.h),
+                        ),
+                        SizedBox(height: 8.h),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              radius: 20.r,
+                              backgroundImage: buyerImageUrl.isNotEmpty
+                                  ? NetworkImage(buyerImageUrl)
+                                  : null,
+                              backgroundColor: Colors.grey.shade200,
+                              child: buyerImageUrl.isEmpty
+                                  ? Icon(
+                                      Icons.person,
+                                      size: 20.r,
+                                      color: Colors.grey,
+                                    )
+                                  : null,
+                            ),
+                            SizedBox(width: 12.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Text(
-                                    orderData['address'].toString(),
+                                    orderFullName,
                                     style: styles(
-                                      fontSize: 12.sp,
+                                      fontSize: 14.sp,
+                                      fontWeight: FontWeight.w600,
                                       color: Colors.black54,
                                     ),
                                   ),
-                                ],
-                                if (orderData['custphone']
-                                        ?.toString()
-                                        .isNotEmpty ==
-                                    true) ...[
-                                  SizedBox(height: 4.h),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.phone,
-                                        size: 16.sp,
-                                        color: Colors.green,
+                                  if (orderAddress.isNotEmpty) ...[
+                                    SizedBox(height: 4.h),
+                                    Text(
+                                      orderAddress,
+                                      style: styles(
+                                        fontSize: 12.sp,
+                                        color: Colors.black54,
                                       ),
-                                      SizedBox(width: 4.w),
-                                      Text(
-                                        'Tel: ${orderData['custphone'].toString()}',
-                                        style: styles(
-                                          fontSize: 12.sp,
-                                          color: Colors.black54,
+                                    ),
+                                  ],
+                                  if (orderPhone.isNotEmpty) ...[
+                                    SizedBox(height: 4.h),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.phone,
+                                          size: 16.sp,
+                                          color: Colors.green,
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                                if (orderData['custemail']
-                                        ?.toString()
-                                        .isNotEmpty ==
-                                    true) ...[
-                                  SizedBox(height: 4.h),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.email,
-                                        size: 16.sp,
-                                        color: Colors.blue,
-                                      ),
-                                      SizedBox(width: 4.w),
-                                      Expanded(
-                                        child: Text(
-                                          orderData['custemail'].toString(),
-                                          style: styles(
-                                            fontSize: 12.sp,
-                                            color: Colors.black54,
+                                        SizedBox(width: 4.w),
+                                        Expanded(
+                                          child: Text(
+                                            'Tel: $orderPhone',
+                                            style: styles(
+                                              fontSize: 12.sp,
+                                              color: Colors.black54,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                                // Fallback if no phone/email
-                                if (orderData['custphone']
-                                            ?.toString()
-                                            .isEmpty ==
-                                        true &&
-                                    orderData['custemail']
-                                            ?.toString()
-                                            .isEmpty ==
-                                        true) ...[
-                                  SizedBox(height: 4.h),
-                                  Text(
-                                    'No contact details available',
-                                    style: styles(
-                                      fontSize: 12.sp,
-                                      color: Colors.grey,
+                                      ],
                                     ),
-                                  ),
+                                  ],
+                                  if (email != 'N/A') ...[
+                                    SizedBox(height: 4.h),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.email,
+                                          size: 16.sp,
+                                          color: Colors.blue,
+                                        ),
+                                        SizedBox(width: 4.w),
+                                        Expanded(
+                                          child: Text(
+                                            email,
+                                            style: styles(
+                                              fontSize: 12.sp,
+                                              color: Colors.black54,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ] else if (orderPhone.isEmpty) ...[
+                                    SizedBox(height: 4.h),
+                                    Text(
+                                      'No contact details available',
+                                      style: styles(
+                                        fontSize: 12.sp,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
               );
+              expansionChildren.add(buyerSection);
               final bool isExpanded = expandedOrders.contains(orderId);
               return Slidable(
                 key: ValueKey(
@@ -972,7 +1034,7 @@ class _PreparingState extends State<Preparing> {
                 ),
                 child: Card(
                   margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                  color: askme ? Colors.red.withOpacity(0.1) : Colors.white,
+                  color: askme ? Colors.red.withAlpha(10) : Colors.white,
                   child: ExpansionTile(
                     backgroundColor: Colors.grey.shade100,
                     collapsedIconColor: Colors.transparent,
@@ -1011,7 +1073,7 @@ class _PreparingState extends State<Preparing> {
                                     children: [
                                       Icon(
                                         serviceIcon,
-                                        size: 20.w,
+                                        size: 34.w,
                                         color: serviceColor,
                                       ),
                                       SizedBox(width: 4.w),

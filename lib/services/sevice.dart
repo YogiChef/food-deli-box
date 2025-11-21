@@ -28,6 +28,7 @@ styles({
   double? height,
   FontWeight? fontWeight = FontWeight.w400,
   Color? color = Colors.black87,
+  TextDecoration? decoration,
 }) {
   return GoogleFonts.josefinSans(
     height: height,

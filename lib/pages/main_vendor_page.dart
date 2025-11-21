@@ -73,11 +73,6 @@ class _MainVendorPageState extends State<MainVendorPage> {
             ),
           );
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Scaffold(
-            body: Center(child: Text('ไม่มีคำสั่งซื้อใหม่')),
-          );
-        }
 
         return Scaffold(
           bottomNavigationBar: BottomNavigationBar(

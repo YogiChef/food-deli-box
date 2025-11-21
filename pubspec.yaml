@@ -54,6 +54,7 @@ dependencies:
   get: ^4.6.6  
   flutter_stripe: ^12.1.0
   flutter_screenutil: ^5.9.3
+  uri: ^1.0.0
   
 
 dev_dependencies:

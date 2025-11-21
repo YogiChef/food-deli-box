@@ -73,6 +73,9 @@ class _DeliveredState extends State<Delivered> {
 
                 final Timestamp timestamp =
                     orderData['timestamp'] as Timestamp? ?? Timestamp.now();
+                // FIXED: ใช้ deliveredAt ถ้ามี (เวลาที่ approve ใน Preparing) มิฉะนั้น fallback ไป timestamp (order time)
+                final Timestamp deliveredTime =
+                    orderData['deliveredAt'] as Timestamp? ?? timestamp;
                 final String serviceType =
                     orderData['serviceType']?.toString() ?? 'pickup';
                 final double shippingCharge =
@@ -138,9 +141,13 @@ class _DeliveredState extends State<Delivered> {
                 }
 
                 return Card(
-                  margin: EdgeInsets.only(left: 10.w, right: 10.w),
+                  margin: EdgeInsets.only(
+                    left: 10.w,
+                    right: 10.w,
+                    bottom: 12.h,
+                  ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(0.r),
+                    borderRadius: BorderRadius.circular(5.r),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.start,
@@ -150,16 +157,16 @@ class _DeliveredState extends State<Delivered> {
                         width: double.infinity,
                         padding: EdgeInsets.all(12.w),
                         decoration: BoxDecoration(
-                          color: isFullyDelivered
-                              ? Colors.green.withOpacity(0.1)
-                              : Colors.orange.withOpacity(0.1),
-                          border: Border(
-                            bottom: BorderSide(
-                              color: isFullyDelivered
-                                  ? Colors.green.shade200
-                                  : Colors.orange.shade200,
-                            ),
-                          ),
+                          // color: isFullyDelivered
+                          //     ? Colors.green.withAlpha(10)
+                          //     : Colors.orange.withAlpha(10),
+                          // border: Border(
+                          //   bottom: BorderSide(
+                          //     color: isFullyDelivered
+                          //         ? Colors.green.shade200
+                          //         : Colors.orange.shade200,
+                          //   ),
+                          // ),
                         ),
                         child: Column(
                           children: [
@@ -170,7 +177,7 @@ class _DeliveredState extends State<Delivered> {
                                   children: [
                                     Icon(
                                       serviceIcon,
-                                      size: 16.w,
+                                      size: 32.w,
                                       color: serviceColor,
                                     ),
                                     SizedBox(width: 4.w),
@@ -186,8 +193,8 @@ class _DeliveredState extends State<Delivered> {
                                 ),
                                 Text(
                                   isFullyDelivered
-                                      ? 'Delivered Order'
-                                      : 'Partial Delivery',
+                                      ? 'ส่งครบแล้ว'
+                                      : 'ส่งยังไม่ครบ',
                                   style: styles(
                                     fontSize: 13.sp,
                                     color: isFullyDelivered
@@ -202,21 +209,21 @@ class _DeliveredState extends State<Delivered> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  DateFormat(
-                                    'dd/MM/yy - kk:mm',
-                                  ).format(timestamp.toDate()),
+                                  DateFormat('dd/MM/yy - kk:mm').format(
+                                    deliveredTime.toDate(),
+                                  ), // FIXED: ใช้ deliveredTime
                                   style: styles(
                                     fontSize: 11.sp,
                                     color: Colors.grey,
                                   ),
                                 ),
                                 Text(
-                                  '${acceptedItems.length}/${itemsRaw.length} รายการ (${isFullyDelivered ? 'complete' : 'partial'})',
+                                  '${acceptedItems.length}/${itemsRaw.length} รายการ (${isFullyDelivered ? 'ครบ' : 'ยังไม่ครบ'})',
                                   style: styles(
                                     fontSize: 12.sp,
                                     color: isFullyDelivered
                                         ? Colors.green
-                                        : Colors.orange,
+                                        : Colors.deepOrange,
                                   ),
                                 ),
                               ],
@@ -245,9 +252,9 @@ class _DeliveredState extends State<Delivered> {
                                 child: Padding(
                                   padding: const EdgeInsets.only(bottom: 4.0),
                                   child: Text(
-                                    DateFormat(
-                                      'dd/MM/yy - kk:mm:ss',
-                                    ).format(timestamp.toDate()),
+                                    DateFormat('dd/MM/yy - kk:mm:ss').format(
+                                      deliveredTime.toDate(),
+                                    ), // FIXED: ใช้ deliveredTime
                                     style: styles(
                                       fontSize: 11.sp,
                                       color: Colors.yellow.shade900,
@@ -278,7 +285,7 @@ class _DeliveredState extends State<Delivered> {
                               children: [
                                 // FIXED: Transaction Items List (แสดงรายการที่ accepted - accumulative)
                                 Text(
-                                  'รายการสินค้า (Transaction Items)',
+                                  'รายการสินค้าที่ส่งแล้ว',
                                   style: styles(
                                     fontSize: 14.sp,
                                     fontWeight: FontWeight.w600,
@@ -316,14 +323,14 @@ class _DeliveredState extends State<Delivered> {
                                       .join(', ');
 
                                   return Container(
-                                    margin: EdgeInsets.only(bottom: 12.h),
+                                    // margin: EdgeInsets.only(bottom: 12.h),
                                     padding: EdgeInsets.all(12.w),
                                     decoration: BoxDecoration(
                                       color: Colors.grey.shade50,
-                                      borderRadius: BorderRadius.circular(8.r),
-                                      border: Border.all(
-                                        color: Colors.grey.shade300,
-                                      ),
+                                      // borderRadius: BorderRadius.circular(8.r),
+                                      // border: Border.all(
+                                      //   color: Colors.grey.shade300,
+                                      // ),
                                     ),
                                     child: Column(
                                       crossAxisAlignment:
@@ -448,7 +455,7 @@ class _DeliveredState extends State<Delivered> {
                                   width: double.infinity,
                                   padding: EdgeInsets.all(12.w),
                                   decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.1),
+                                    color: Colors.blue.withAlpha(10),
                                     borderRadius: BorderRadius.circular(8.r),
                                   ),
                                   child: Column(
@@ -530,7 +537,7 @@ class _DeliveredState extends State<Delivered> {
                                 SizedBox(height: 12.h),
                                 // Buyer Details (ท้ายเรื่อง)
                                 Text(
-                                  'Buyer Details',
+                                  'ข้อมูลผู้สั่งซื้อ',
                                   style: styles(
                                     fontSize: 14.sp,
                                     fontWeight: FontWeight.w600,
@@ -586,7 +593,7 @@ class _DeliveredState extends State<Delivered> {
                                           ),
                                           if (phone.isNotEmpty) ...[
                                             Text(
-                                              'Tel: $phone',
+                                              phone,
                                               style: styles(
                                                 fontSize: 12.sp,
                                                 color: Colors.black54,
@@ -595,7 +602,7 @@ class _DeliveredState extends State<Delivered> {
                                           ],
                                           if (email.isNotEmpty) ...[
                                             Text(
-                                              'Email: $email',
+                                              email,
                                               style: styles(
                                                 fontSize: 12.sp,
                                                 color: Colors.black54,
