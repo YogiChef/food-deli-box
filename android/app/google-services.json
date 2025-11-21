@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "613403315885",
+    "project_id": "deli-box",
+    "storage_bucket": "deli-box.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:613403315885:android:98be491eceef3021ad0024",
+        "android_client_info": {
+          "package_name": "com.dev.deli_box"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "613403315885-hsgtd47bk7pr5jagj2apofn3c5qk47iu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8fTtl61cv2giyA9xx124fTS-1bjpDSmU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "613403315885-hsgtd47bk7pr5jagj2apofn3c5qk47iu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:613403315885:android:f90c63a79c3b8ef9ad0024",
+        "android_client_info": {
+          "package_name": "com.dev.vendor_box"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "613403315885-hsgtd47bk7pr5jagj2apofn3c5qk47iu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB8fTtl61cv2giyA9xx124fTS-1bjpDSmU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "613403315885-hsgtd47bk7pr5jagj2apofn3c5qk47iu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
