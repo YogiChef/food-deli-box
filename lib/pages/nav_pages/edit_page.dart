@@ -20,7 +20,7 @@ class _EditPageState extends State<EditPage> {
         appBar: AppBar(
           elevation: 0,
           centerTitle: true,
-          backgroundColor: Colors.pink.shade800,
+          backgroundColor: mainColor,
           automaticallyImplyLeading: false,
           title: Text(
             'Edit Products',
@@ -38,7 +38,7 @@ class _EditPageState extends State<EditPage> {
               fontWeight: FontWeight.bold,
               fontSize: 14.sp,
             ),
-            unselectedLabelColor: Colors.blueGrey,
+            unselectedLabelColor: Colors.white54,
             dividerColor: Colors.transparent,
             tabs: const [
               Tab(child: Text('Published')),

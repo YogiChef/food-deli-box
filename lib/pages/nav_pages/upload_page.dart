@@ -29,7 +29,7 @@ class _UploadPageState extends State<UploadPage> {
         key: _formKey,
         child: Scaffold(
           appBar: AppBar(
-            backgroundColor: Colors.pink.shade800,
+            backgroundColor: mainColor,
             automaticallyImplyLeading: false,
             centerTitle: true,
             title: Text(

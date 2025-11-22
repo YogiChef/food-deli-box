@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:vendor_box/pages/general_upload.dart';
 import 'package:vendor_box/pages/nav_pages/eanings_page.dart';
 import 'package:vendor_box/pages/nav_pages/edit_page.dart';
 import 'package:vendor_box/pages/nav_pages/logout.dart';
@@ -36,7 +37,7 @@ class _MainVendorPageState extends State<MainVendorPage> {
   int _pageIndex = 0;
   final List<Widget> _page = [
     const EarningPage(),
-    const UploadPage(),
+    const GeneralTab(),
     const EditPage(),
     const OrderPage(),
     const LogOutPage(),
@@ -84,7 +85,7 @@ class _MainVendorPageState extends State<MainVendorPage> {
                 _pageIndex = value;
               });
             },
-            selectedItemColor: Colors.pink.shade800,
+            selectedItemColor: mainColor,
             items: [
               BottomNavigationBarItem(
                 icon: Icon(

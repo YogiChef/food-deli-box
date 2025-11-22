@@ -20,7 +20,7 @@ class _OrderPageState extends State<OrderPage> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: Colors.pink.shade800,
+          backgroundColor: mainColor,
           automaticallyImplyLeading: false,
           title: Text(
             'Orders',
@@ -35,7 +35,7 @@ class _OrderPageState extends State<OrderPage> {
           bottom: TabBar(
             indicatorColor: Colors.white,
             indicatorWeight: 6,
-            unselectedLabelColor: Colors.blueGrey,
+            unselectedLabelColor: Colors.white54,
             labelColor: Colors.white,
             labelStyle: TextStyle(
               fontSize: 14.sp,

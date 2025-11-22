@@ -199,7 +199,7 @@ class _EarningPageState extends State<EarningPage> {
                               padding: EdgeInsets.symmetric(vertical: 10.h),
                               width: screenWidth * 0.8,
                               decoration: BoxDecoration(
-                                color: Colors.pink.shade800,
+                                color: mainColor,
                                 borderRadius: BorderRadius.circular(15),
                               ),
                               child: Column(

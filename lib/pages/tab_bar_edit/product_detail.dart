@@ -38,7 +38,7 @@ class _VendorProductDetailState extends State<VendorProductDetail> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.pink.shade800,
+        backgroundColor: mainColor,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(

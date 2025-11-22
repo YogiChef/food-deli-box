@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vendor_box/services/sevice.dart';
 
 class BottonWidget extends StatelessWidget {
   final String label;
@@ -27,7 +28,7 @@ class BottonWidget extends StatelessWidget {
       child: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
           maximumSize: MediaQuery.of(context).size,
-          backgroundColor: color ?? Colors.pink.shade800,
+          backgroundColor: color ?? mainColor,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
         ),

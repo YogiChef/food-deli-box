@@ -672,7 +672,7 @@ class _GeneralTabState extends State<GeneralTab>
                           child: Text(
                             'Schedule',
                             style: styles(
-                              color: Colors.pink.shade800,
+                              color: mainColor,
                               fontSize: 16.sp,
                               fontWeight: FontWeight.w500,
                             ),

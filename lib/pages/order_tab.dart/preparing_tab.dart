@@ -112,11 +112,11 @@ class _PreparingState extends State<Preparing> {
                 try {
                   final rawItem = itemsRaw[rawIndex];
                   final item = Map<String, dynamic>.from(rawItem ?? {});
-                  // FIXED: Filter out empty or accepted items (move to "Delivered" by hiding), but show cancelled for restore
+                  // FIXED: Filter out empty, accepted, or cancelled items
                   final bool isAccepted = item['accepted'] ?? false;
-                  final bool isCancelled = item['askme'] ?? false;
-                  if (item.isNotEmpty && !isAccepted) {
-                    // Hide only accepted; show pending + cancelled
+                  final bool isCancelled = item['cancelled'] ?? false;
+                  if (item.isNotEmpty && !isAccepted && !isCancelled) {
+                    // Hide accepted and cancelled; show only pending (+ requested)
                     item['__rawIndex'] =
                         rawIndex; // Temporary key for original index
                     items.add(item);
@@ -127,7 +127,7 @@ class _PreparingState extends State<Preparing> {
                   ); // Debug fallback
                 }
               }
-              // NEW: Skip rendering entire card if no visible items (all accepted/completed)
+              // NEW: Skip rendering entire card if no visible items (all accepted/cancelled)
               if (items.isEmpty) {
                 return const SizedBox.shrink();
               }
@@ -142,13 +142,12 @@ class _PreparingState extends State<Preparing> {
               final double subTotal = serviceType == 'delivery'
                   ? totalPrice - shippingCharge
                   : totalPrice;
-              final bool askme = orderData['askme'] ?? false;
+              final bool orderCancelRequested =
+                  orderData['orderCancelRequested'] ?? false;
               final String orderId = document.id;
               final String buyerId = orderData['buyerId']?.toString() ?? '';
               // FIXED: Count actual pending items (exclude cancelled)
-              final int pendingCount = items
-                  .where((item) => !(item['askme'] ?? false))
-                  .length;
+              final int pendingCount = items.length; // Since filtered already
               // Print vendor name once per order (no spam)
               print(
                 '=== DEBUG PREPARING VENDOR NAME === Order ${document.id}: fallback="${orderData['bussinessName']?.toString() ?? 'Unknown Vendor'}"',
@@ -159,7 +158,7 @@ class _PreparingState extends State<Preparing> {
               );
               // Print items debug for index tracking
               print(
-                '=== DEBUG ITEMS INDEX === Order $orderId: rawLength=${itemsRaw.length}, filteredItems=${items.length} (hidden accepted), pendingCount=$pendingCount',
+                '=== DEBUG ITEMS INDEX === Order $orderId: rawLength=${itemsRaw.length}, filteredItems=${items.length} (hidden accepted/cancelled), pendingCount=$pendingCount',
               );
               // FIXED: Debug print for buyer details (to check if fields exist in Firestore)
               print(
@@ -188,7 +187,9 @@ class _PreparingState extends State<Preparing> {
                         final int rawIndex =
                             item['__rawIndex']
                                 as int; // Use original raw index for Firestore
-                        final bool itemAskme = item['askme'] ?? false;
+                        final bool itemCancelRequested =
+                            item['cancelRequested'] ?? false;
+                        final bool itemCancelled = item['cancelled'] ?? false;
                         final bool itemAccepted =
                             item['accepted'] ??
                             false; // Should be false due to filter
@@ -227,151 +228,11 @@ class _PreparingState extends State<Preparing> {
                             ? imagesRaw.first.toString()
                             : ''; // FIXED: Debug print for action
                         print(
-                          '=== DEBUG ITEM BUILD === Order $orderId, UI Index: $uiIndex, Raw Index: $rawIndex, Item: $proName, Cancelled: $itemAskme',
+                          '=== DEBUG ITEM BUILD === Order $orderId, UI Index: $uiIndex, Raw Index: $rawIndex, Item: $proName, CancelRequested: $itemCancelRequested, Cancelled: $itemCancelled',
                         );
-                        // FIXED: Conditional actions based on item status
-                        final bool isCancelling = !itemAskme;
-                        List<Widget> actionChildren = [
-                          SlidableAction(
-                            flex: 2,
-                            onPressed: (_) async {
-                              print(
-                                '=== DEBUG CANCEL/RESTORE PRESSED === Order $orderId, Raw Index $rawIndex, Item: $proName, itemsRaw length: ${itemsRaw.length}',
-                              );
-                              if (rawIndex < 0 || rawIndex >= itemsRaw.length) {
-                                Fluttertoast.showToast(
-                                  msg: 'Invalid item index: $rawIndex',
-                                );
-                                return;
-                              }
-                              EasyLoading.show(
-                                status: isCancelling
-                                    ? 'Cancelling item...'
-                                    : 'Restoring item...',
-                              );
-                              try {
-                                final proId = item['proId']?.toString() ?? '';
-                                final bool newAskme = !itemAskme;
-                                final int iQuantity =
-                                    (item['quantity'] as num?)?.toInt() ?? 1;
-                                await firestore.runTransaction((tx) async {
-                                  final docRef = firestore
-                                      .collection('orders')
-                                      .doc(orderId);
-                                  final snap = await tx.get(docRef);
-                                  if (snap.exists) {
-                                    final data = snap.data() as Map;
-                                    final List itemsList = List.from(
-                                      data['items'] ?? [],
-                                    );
-                                    if (rawIndex >= 0 &&
-                                        rawIndex < itemsList.length) {
-                                      final Map<String, dynamic> targetItem =
-                                          Map<String, dynamic>.from(
-                                            itemsList[rawIndex],
-                                          );
-                                      // Update askme in place
-                                      targetItem['askme'] = newAskme;
-                                      itemsList[rawIndex] = targetItem;
-                                      // Stock adjustment
-                                      if (proId.isNotEmpty) {
-                                        final prodRef = FirebaseFirestore
-                                            .instance
-                                            .collection('products')
-                                            .doc(proId);
-                                        final prodSnap = await tx.get(prodRef);
-                                        if (prodSnap.exists) {
-                                          int pqty =
-                                              (prodSnap.data()?['pqty']
-                                                          as num? ??
-                                                      0)
-                                                  .toInt();
-                                          if (newAskme) {
-                                            // Cancelling: restore stock
-                                            pqty += iQuantity;
-                                          } else {
-                                            // Restoring: subtract stock
-                                            if (pqty >= iQuantity) {
-                                              pqty -= iQuantity;
-                                            } else {
-                                              throw Exception(
-                                                'Insufficient stock to restore',
-                                              );
-                                            }
-                                          }
-                                          tx.update(prodRef, {'pqty': pqty});
-                                        }
-                                      }
-                                      // Recalculate totals excluding cancelled items (for pending view)
-                                      double newPendingSubTotal = 0.0;
-                                      for (var it in itemsList) {
-                                        if (!(it['askme'] ?? false) &&
-                                            !(it['accepted'] ?? false)) {
-                                          final double itPrice =
-                                              (it['price'] as num?)
-                                                  ?.toDouble() ??
-                                              0.0;
-                                          final double? itExtra =
-                                              (it['extraPrice'] as num?)
-                                                  ?.toDouble();
-                                          final int itQty =
-                                              (it['quantity'] as num?)
-                                                  ?.toInt() ??
-                                              1;
-                                          newPendingSubTotal +=
-                                              (itPrice + (itExtra ?? 0.0)) *
-                                              itQty;
-                                        }
-                                      }
-                                      final String itServiceType =
-                                          data['serviceType']?.toString() ??
-                                          'pickup';
-                                      final double itShippingCharge =
-                                          (data['shippingCharge'] as num?)
-                                              ?.toDouble() ??
-                                          0.0;
-                                      final double newTotalPrice =
-                                          itServiceType == 'delivery'
-                                          ? newPendingSubTotal +
-                                                itShippingCharge
-                                          : newPendingSubTotal;
-                                      // Update order
-                                      tx.update(docRef, {
-                                        'items': itemsList,
-                                        'totalPrice':
-                                            newTotalPrice, // Update to pending total
-                                      });
-                                    } else {
-                                      throw Exception(
-                                        'Invalid index $rawIndex',
-                                      );
-                                    }
-                                  }
-                                });
-                                EasyLoading.dismiss();
-                                Fluttertoast.showToast(
-                                  msg: isCancelling
-                                      ? 'Item cancelled'
-                                      : 'Item restored',
-                                );
-                              } catch (e) {
-                                EasyLoading.dismiss();
-                                Fluttertoast.showToast(
-                                  msg:
-                                      '${isCancelling ? 'Cancel' : 'Restore'} failed: $e',
-                                  backgroundColor: Colors.red,
-                                );
-                              }
-                            },
-                            backgroundColor: itemAskme
-                                ? Colors.green
-                                : const Color(0xFFFE4A49),
-                            foregroundColor: Colors.white,
-                            icon: itemAskme ? Icons.restore : Icons.cancel,
-                            label: itemAskme ? 'Restore Item' : 'Cancel Item',
-                          ),
-                        ];
-                        // Add Accept action only if not accepted (always true due to filter, but conditional for safety)
+                        // FIXED: Conditional actions based on item status - only two options: Accept or Approve Cancel (if requested)
+                        List<Widget> actionChildren = [];
+                        // Always add Accept action if not accepted
                         if (!itemAccepted) {
                           actionChildren.add(
                             SlidableAction(
@@ -414,11 +275,13 @@ class _PreparingState extends State<Preparing> {
                                             Map<String, dynamic>.from(
                                               itemsList[rawIndex],
                                             );
+                                        // Clear cancel request if any
+                                        targetItem['cancelRequested'] = false;
                                         // Mark as accepted (keep in array for Delivered to show)
                                         targetItem['accepted'] = true;
                                         itemsList[rawIndex] = targetItem;
 
-                                        // Stock adjustment for cancelled items (if was cancelled before accept)
+                                        // FIXED: Deduct stock on Accept (since not deducted on order creation)
                                         final proId =
                                             targetItem['proId']?.toString() ??
                                             '';
@@ -426,9 +289,7 @@ class _PreparingState extends State<Preparing> {
                                             (targetItem['quantity'] as num?)
                                                 ?.toInt() ??
                                             1;
-                                        final bool wasCancelled =
-                                            targetItem['askme'] ?? false;
-                                        if (proId.isNotEmpty && wasCancelled) {
+                                        if (proId.isNotEmpty) {
                                           final prodRef = FirebaseFirestore
                                               .instance
                                               .collection('products')
@@ -448,19 +309,21 @@ class _PreparingState extends State<Preparing> {
                                               });
                                             } else {
                                               throw Exception(
-                                                'Insufficient stock to accept cancelled item',
+                                                'Insufficient stock',
                                               );
                                             }
                                           }
                                         }
+
                                         // Recalculate pending totals (exclude accepted & cancelled)
                                         double newPendingSubTotal = 0.0;
+                                        int pendingCount = 0;
                                         bool allAccepted = true;
                                         for (var it in itemsList) {
                                           final bool itAccepted =
                                               it['accepted'] ?? false;
                                           final bool itCancelled =
-                                              it['askme'] ?? false;
+                                              it['cancelled'] ?? false;
                                           if (!itAccepted && !itCancelled) {
                                             final double itPrice =
                                                 (it['price'] as num?)
@@ -476,6 +339,7 @@ class _PreparingState extends State<Preparing> {
                                             newPendingSubTotal +=
                                                 (itPrice + (itExtra ?? 0.0)) *
                                                 itQty;
+                                            pendingCount++;
                                           }
                                           if (!itAccepted) allAccepted = false;
                                         }
@@ -487,17 +351,22 @@ class _PreparingState extends State<Preparing> {
                                         // FIXED: Set deliveredAt to current time every time an item is accepted (latest approve time)
                                         final Timestamp approveTime =
                                             Timestamp.now();
-                                        // NEW: Auto-move to delivered if all items accepted
-                                        if (allAccepted) {
-                                          orderDelivered = true;
+                                        // NEW: Auto-move to delivered if no pending items
+                                        if (pendingCount == 0) {
+                                          final String newStatus = allAccepted
+                                              ? 'delivered'
+                                              : 'cancelled';
+                                          orderDelivered =
+                                              newStatus == 'delivered';
                                           tx.update(docRef, {
                                             'items': itemsList,
-                                            'status':
-                                                'delivered', // Change to 'delivered' for Delivered page
+                                            'status': newStatus,
                                             'totalPrice':
-                                                newTotalPrice, // Keep as 0 or original? Use original total for completed
-                                            'deliveredAt':
-                                                approveTime, // FIXED: Set delivered time for full delivery
+                                                newStatus == 'delivered'
+                                                ? data['originalTotalPrice'] ??
+                                                      totalPrice // Use original total for completed
+                                                : newTotalPrice, // Pending total for cancelled
+                                            'deliveredAt': approveTime,
                                           });
                                         } else {
                                           tx.update(docRef, {
@@ -543,6 +412,249 @@ class _PreparingState extends State<Preparing> {
                             ),
                           );
                         }
+                        // FIXED: Conditional cancel actions based on request status - only Approve Cancel if requested, else Vendor Cancel
+                        if (itemCancelRequested) {
+                          // Approve Cancel (set cancelled = true, clear request) - no stock return (not deducted yet)
+                          actionChildren.add(
+                            SlidableAction(
+                              flex: 2,
+                              onPressed: (_) async {
+                                print(
+                                  '=== DEBUG APPROVE CANCEL PRESSED === Order $orderId, Raw Index $rawIndex, Item: $proName',
+                                );
+                                if (rawIndex < 0 ||
+                                    rawIndex >= itemsRaw.length) {
+                                  Fluttertoast.showToast(
+                                    msg: 'Invalid item index: $rawIndex',
+                                  );
+                                  return;
+                                }
+                                EasyLoading.show(status: 'Approving cancel...');
+                                try {
+                                  await firestore.runTransaction((tx) async {
+                                    final docRef = firestore
+                                        .collection('orders')
+                                        .doc(orderId);
+                                    final snap = await tx.get(docRef);
+                                    if (snap.exists) {
+                                      final data = snap.data() as Map;
+                                      final List itemsList = List.from(
+                                        data['items'] ?? [],
+                                      );
+                                      final String itServiceType =
+                                          data['serviceType']?.toString() ??
+                                          'pickup';
+                                      final double itShippingCharge =
+                                          (data['shippingCharge'] as num?)
+                                              ?.toDouble() ??
+                                          0.0;
+                                      if (rawIndex >= 0 &&
+                                          rawIndex < itemsList.length) {
+                                        final Map<String, dynamic> targetItem =
+                                            Map<String, dynamic>.from(
+                                              itemsList[rawIndex],
+                                            );
+                                        // Mark as cancelled and clear request
+                                        targetItem['cancelled'] = true;
+                                        targetItem['cancelRequested'] = false;
+                                        itemsList[rawIndex] = targetItem;
+
+                                        // Recalculate pending totals (exclude accepted & cancelled)
+                                        double newPendingSubTotal = 0.0;
+                                        int pendingCount = 0;
+                                        bool allAccepted = true;
+                                        for (var it in itemsList) {
+                                          final bool itAccepted =
+                                              it['accepted'] ?? false;
+                                          final bool itCancelled =
+                                              it['cancelled'] ?? false;
+                                          if (!itAccepted && !itCancelled) {
+                                            final double itPrice =
+                                                (it['price'] as num?)
+                                                    ?.toDouble() ??
+                                                0.0;
+                                            final double? itExtra =
+                                                (it['extraPrice'] as num?)
+                                                    ?.toDouble();
+                                            final int itQty =
+                                                (it['quantity'] as num?)
+                                                    ?.toInt() ??
+                                                1;
+                                            newPendingSubTotal +=
+                                                (itPrice + (itExtra ?? 0.0)) *
+                                                itQty;
+                                            pendingCount++;
+                                          }
+                                          if (!itAccepted) allAccepted = false;
+                                        }
+                                        final double newTotalPrice =
+                                            itServiceType == 'delivery'
+                                            ? newPendingSubTotal +
+                                                  itShippingCharge
+                                            : newPendingSubTotal;
+                                        // NEW: Auto-move status if no pending items
+                                        String? newStatus;
+                                        if (pendingCount == 0) {
+                                          newStatus = allAccepted
+                                              ? 'delivered'
+                                              : 'cancelled';
+                                        }
+                                        // Update order
+                                        final Map<String, dynamic> updates = {
+                                          'items': itemsList,
+                                          'totalPrice': newTotalPrice,
+                                        };
+                                        if (newStatus != null) {
+                                          updates['status'] = newStatus;
+                                        }
+                                        tx.update(docRef, updates);
+                                      } else {
+                                        throw Exception(
+                                          'Invalid index $rawIndex',
+                                        );
+                                      }
+                                    }
+                                  });
+                                  EasyLoading.dismiss();
+                                  Fluttertoast.showToast(
+                                    msg: 'Item cancel approved',
+                                    backgroundColor: Colors.orange,
+                                  );
+                                } catch (e) {
+                                  EasyLoading.dismiss();
+                                  Fluttertoast.showToast(
+                                    msg: 'Approve cancel failed: $e',
+                                    backgroundColor: Colors.red,
+                                  );
+                                }
+                              },
+                              backgroundColor: const Color(0xFFFE4A49),
+                              foregroundColor: Colors.white,
+                              icon: Icons.cancel,
+                              label: 'Approve Cancel',
+                            ),
+                          );
+                        } else {
+                          // Vendor Initiate Cancel (set cancelled = true) - no stock return (not deducted yet)
+                          actionChildren.add(
+                            SlidableAction(
+                              flex: 2,
+                              onPressed: (_) async {
+                                print(
+                                  '=== DEBUG VENDOR CANCEL PRESSED === Order $orderId, Raw Index $rawIndex, Item: $proName',
+                                );
+                                if (rawIndex < 0 ||
+                                    rawIndex >= itemsRaw.length) {
+                                  Fluttertoast.showToast(
+                                    msg: 'Invalid item index: $rawIndex',
+                                  );
+                                  return;
+                                }
+                                EasyLoading.show(status: 'Cancelling item...');
+                                try {
+                                  await firestore.runTransaction((tx) async {
+                                    final docRef = firestore
+                                        .collection('orders')
+                                        .doc(orderId);
+                                    final snap = await tx.get(docRef);
+                                    if (snap.exists) {
+                                      final data = snap.data() as Map;
+                                      final List itemsList = List.from(
+                                        data['items'] ?? [],
+                                      );
+                                      final String itServiceType =
+                                          data['serviceType']?.toString() ??
+                                          'pickup';
+                                      final double itShippingCharge =
+                                          (data['shippingCharge'] as num?)
+                                              ?.toDouble() ??
+                                          0.0;
+                                      if (rawIndex >= 0 &&
+                                          rawIndex < itemsList.length) {
+                                        final Map<String, dynamic> targetItem =
+                                            Map<String, dynamic>.from(
+                                              itemsList[rawIndex],
+                                            );
+                                        // Mark as cancelled
+                                        targetItem['cancelled'] = true;
+                                        itemsList[rawIndex] = targetItem;
+
+                                        // Recalculate pending totals (exclude accepted & cancelled)
+                                        double newPendingSubTotal = 0.0;
+                                        int pendingCount = 0;
+                                        bool allAccepted = true;
+                                        for (var it in itemsList) {
+                                          final bool itAccepted =
+                                              it['accepted'] ?? false;
+                                          final bool itCancelled =
+                                              it['cancelled'] ?? false;
+                                          if (!itAccepted && !itCancelled) {
+                                            final double itPrice =
+                                                (it['price'] as num?)
+                                                    ?.toDouble() ??
+                                                0.0;
+                                            final double? itExtra =
+                                                (it['extraPrice'] as num?)
+                                                    ?.toDouble();
+                                            final int itQty =
+                                                (it['quantity'] as num?)
+                                                    ?.toInt() ??
+                                                1;
+                                            newPendingSubTotal +=
+                                                (itPrice + (itExtra ?? 0.0)) *
+                                                itQty;
+                                            pendingCount++;
+                                          }
+                                          if (!itAccepted) allAccepted = false;
+                                        }
+                                        final double newTotalPrice =
+                                            itServiceType == 'delivery'
+                                            ? newPendingSubTotal +
+                                                  itShippingCharge
+                                            : newPendingSubTotal;
+                                        // NEW: Auto-move status if no pending items
+                                        String? newStatus;
+                                        if (pendingCount == 0) {
+                                          newStatus = allAccepted
+                                              ? 'delivered'
+                                              : 'cancelled';
+                                        }
+                                        // Update order
+                                        final Map<String, dynamic> updates = {
+                                          'items': itemsList,
+                                          'totalPrice': newTotalPrice,
+                                        };
+                                        if (newStatus != null) {
+                                          updates['status'] = newStatus;
+                                        }
+                                        tx.update(docRef, updates);
+                                      } else {
+                                        throw Exception(
+                                          'Invalid index $rawIndex',
+                                        );
+                                      }
+                                    }
+                                  });
+                                  EasyLoading.dismiss();
+                                  Fluttertoast.showToast(
+                                    msg: 'Item cancelled by vendor',
+                                    backgroundColor: Colors.orange,
+                                  );
+                                } catch (e) {
+                                  EasyLoading.dismiss();
+                                  Fluttertoast.showToast(
+                                    msg: 'Cancel failed: $e',
+                                    backgroundColor: Colors.red,
+                                  );
+                                }
+                              },
+                              backgroundColor: const Color(0xFFFE4A49),
+                              foregroundColor: Colors.white,
+                              icon: Icons.cancel,
+                              label: 'Cancel Item',
+                            ),
+                          );
+                        }
                         return Container(
                           key: ValueKey('$orderId-$itemId-$rawIndex'),
                           margin: EdgeInsets.only(bottom: 8.h),
@@ -569,32 +681,64 @@ class _PreparingState extends State<Preparing> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          // FIXED: Product image for item (not store)
+                                          // FIXED: Product image for item with cancel request overlay
                                           SizedBox(
                                             height: 50.h,
                                             width: 50.w,
-                                            child: ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(8.r),
-                                              child: productImage.isNotEmpty
-                                                  ? Image.network(
-                                                      productImage,
-                                                      fit: BoxFit.cover,
-                                                      errorBuilder:
-                                                          (
-                                                            context,
-                                                            error,
-                                                            stackTrace,
-                                                          ) => Icon(
-                                                            Icons
-                                                                .image_not_supported,
-                                                            size: 50.w,
+                                            child: Stack(
+                                              children: [
+                                                ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        8.r,
+                                                      ),
+                                                  child: productImage.isNotEmpty
+                                                      ? Image.network(
+                                                          productImage,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder:
+                                                              (
+                                                                context,
+                                                                error,
+                                                                stackTrace,
+                                                              ) => Icon(
+                                                                Icons
+                                                                    .image_not_supported,
+                                                                size: 50.w,
+                                                              ),
+                                                        )
+                                                      : Icon(
+                                                          Icons
+                                                              .image_not_supported,
+                                                          size: 50.w,
+                                                        ),
+                                                ),
+                                                if (itemCancelRequested &&
+                                                    !itemCancelled)
+                                                  Positioned.fill(
+                                                    child: Container(
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black54,
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              8.r,
+                                                            ),
+                                                      ),
+                                                      child: Center(
+                                                        child: CircleAvatar(
+                                                          backgroundColor:
+                                                              Colors.white70,
+                                                          radius: 20.r,
+                                                          child: Icon(
+                                                            Icons.hourglass_top,
+                                                            color: Colors.red,
+                                                            size: 24.sp,
                                                           ),
-                                                    )
-                                                  : Icon(
-                                                      Icons.image_not_supported,
-                                                      size: 50.w,
+                                                        ),
+                                                      ),
                                                     ),
+                                                  ),
+                                              ],
                                             ),
                                           ),
                                           SizedBox(width: 12.w),
@@ -664,8 +808,8 @@ class _PreparingState extends State<Preparing> {
                                                     ),
                                                   ),
                                                 ],
-                                                // FIXED: Add status indicator per item (only for cancelled, since accepted hidden)
-                                                if (itemAskme) ...[
+                                                // FIXED: Add status indicator if requested (overlay handles visual)
+                                                if (itemCancelRequested) ...[
                                                   Padding(
                                                     padding: EdgeInsets.only(
                                                       top: 4.h,
@@ -673,13 +817,13 @@ class _PreparingState extends State<Preparing> {
                                                     child: Row(
                                                       children: [
                                                         Icon(
-                                                          Icons.cancel,
-                                                          size: 16.sp,
+                                                          Icons.hourglass_top,
+                                                          size: 20.sp,
                                                           color: Colors.red,
                                                         ),
                                                         SizedBox(width: 4.w),
                                                         Text(
-                                                          'Cancelled',
+                                                          'ขอให้ยกเลิกรายการนี้',
                                                           style: styles(
                                                             fontSize: 12.sp,
                                                             color: Colors.red,
@@ -710,7 +854,7 @@ class _PreparingState extends State<Preparing> {
                   Padding(
                     padding: EdgeInsets.all(16.w),
                     child: Text(
-                      'ไม่มีรายการสินค้า (ทั้งหมดย้ายไป Delivered แล้ว)',
+                      'ไม่มีรายการสินค้า',
                       style: styles(fontSize: 14.sp, color: Colors.grey),
                     ),
                   ),
@@ -817,7 +961,7 @@ class _PreparingState extends State<Preparing> {
 
               // Log order fields for quick check
               print(
-                '=== DEBUG ORDER FIELDS === Order $orderId: email="$orderEmail", buyerImage="$orderBuyerImage" (default: $defaultAvatarUrl)',
+                '=== DEBUG ORDER FIELDS === Order $orderId: email="$orderEmail", buyerImage="$orderBuyerImage" (default: $defaultAvatarUrl), orderCancelRequested=$orderCancelRequested',
               );
 
               Widget
@@ -876,7 +1020,7 @@ class _PreparingState extends State<Preparing> {
                     width: double.infinity,
                     padding: EdgeInsets.all(16.w),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.05),
+                      color: Colors.orange.withAlpha(50),
                       border: Border(
                         top: BorderSide(color: Colors.orange.shade200),
                       ),
@@ -885,7 +1029,7 @@ class _PreparingState extends State<Preparing> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Buyer Details',
+                          'ข้อมูลผู้สั่งซื้อ',
                           style: styles(
                             fontSize: 14.sp,
                             fontWeight: FontWeight.w600,
@@ -998,6 +1142,118 @@ class _PreparingState extends State<Preparing> {
               );
               expansionChildren.add(buyerSection);
               final bool isExpanded = expandedOrders.contains(orderId);
+              // FIXED: Order-level actions based on request status - only Approve Cancel if requested, else Vendor Cancel
+              List<Widget> orderActionChildren = [];
+              if (orderCancelRequested) {
+                // Approve Order Cancel - set all pending to cancelled, no stock return (not deducted yet)
+                orderActionChildren.add(
+                  SlidableAction(
+                    flex: 3,
+                    onPressed: (context) async {
+                      EasyLoading.show(status: 'Approving order cancel...');
+                      try {
+                        await firestore.runTransaction((tx) async {
+                          final docRef = firestore
+                              .collection('orders')
+                              .doc(orderId);
+                          final snap = await tx.get(docRef);
+                          if (snap.exists) {
+                            final data = snap.data() as Map;
+                            final List itemsList = List.from(
+                              data['items'] ?? [],
+                            );
+                            // Set all pending items to cancelled
+                            for (int i = 0; i < itemsList.length; i++) {
+                              final Map<String, dynamic> it =
+                                  Map<String, dynamic>.from(itemsList[i]);
+                              if (!(it['accepted'] ?? false) &&
+                                  !(it['cancelled'] ?? false)) {
+                                it['cancelled'] = true;
+                                it['cancelRequested'] = false;
+                                itemsList[i] = it;
+                              }
+                            }
+                            // Update order status and clear request
+                            tx.update(docRef, {
+                              'status': 'cancelled',
+                              'orderCancelRequested': false,
+                              'items': itemsList,
+                            });
+                          }
+                        });
+                        EasyLoading.dismiss();
+                        Fluttertoast.showToast(
+                          msg: 'Order cancel approved',
+                          backgroundColor: Colors.orange,
+                        );
+                      } catch (e) {
+                        EasyLoading.dismiss();
+                        Fluttertoast.showToast(
+                          msg: 'Approve order cancel failed: $e',
+                          backgroundColor: Colors.red,
+                        );
+                      }
+                    },
+                    backgroundColor: const Color(0xFFFE4A49),
+                    foregroundColor: Colors.grey.shade100,
+                    icon: Icons.cancel,
+                    label: 'Approve Order Cancel',
+                  ),
+                );
+              } else {
+                // Vendor Initiate Order Cancel - set all pending to cancelled, no stock return (not deducted yet)
+                orderActionChildren.add(
+                  SlidableAction(
+                    flex: 3,
+                    onPressed: (context) async {
+                      EasyLoading.show(status: 'Cancelling order...');
+                      try {
+                        await firestore.runTransaction((tx) async {
+                          final docRef = firestore
+                              .collection('orders')
+                              .doc(orderId);
+                          final snap = await tx.get(docRef);
+                          if (snap.exists) {
+                            final data = snap.data() as Map;
+                            final List itemsList = List.from(
+                              data['items'] ?? [],
+                            );
+                            // Set all pending items to cancelled
+                            for (int i = 0; i < itemsList.length; i++) {
+                              final Map<String, dynamic> it =
+                                  Map<String, dynamic>.from(itemsList[i]);
+                              if (!(it['accepted'] ?? false) &&
+                                  !(it['cancelled'] ?? false)) {
+                                it['cancelled'] = true;
+                                itemsList[i] = it;
+                              }
+                            }
+                            tx.update(docRef, {
+                              'status': 'cancelled',
+                              'items': itemsList,
+                            });
+                          }
+                        });
+                        EasyLoading.dismiss();
+                        Fluttertoast.showToast(
+                          msg: 'Order cancelled by vendor',
+                          backgroundColor: Colors.orange,
+                        );
+                      } catch (e) {
+                        EasyLoading.dismiss();
+                        Fluttertoast.showToast(
+                          msg: 'Order cancel failed: $e',
+                          backgroundColor: Colors.red,
+                        );
+                      }
+                    },
+                    backgroundColor: const Color(0xFFFE4A49),
+                    foregroundColor: Colors.grey.shade100,
+                    icon: Icons.cancel,
+                    label: 'Cancel Order',
+                  ),
+                );
+              }
               return Slidable(
                 key: ValueKey(
                   document.id,
@@ -1006,43 +1262,18 @@ class _PreparingState extends State<Preparing> {
                     !isExpanded, // FIXED: Disable outer Slidable when expanded to avoid gesture conflict with inner
                 startActionPane: ActionPane(
                   motion: const ScrollMotion(),
-                  children: [
-                    SlidableAction(
-                      flex: 3,
-                      onPressed: (context) async {
-                        final String orderId = document.id;
-                        final bool newAskme = !askme;
-                        await firestore
-                            .collection('orders')
-                            .doc(orderId)
-                            .update({'askme': newAskme});
-                        if (!newAskme) {
-                          await firestore
-                              .collection('orders')
-                              .doc(orderId)
-                              .update({'status': 'cancelled'});
-                        }
-                      },
-                      backgroundColor: askme
-                          ? Colors.green
-                          : const Color(0xFFFE4A49),
-                      foregroundColor: Colors.grey.shade100,
-                      icon: askme ? Icons.restore : Icons.auto_delete,
-                      label: askme ? 'Please Wait..' : 'Cancel Order',
-                    ),
-                  ],
+                  children: orderActionChildren,
                 ),
                 child: Card(
                   margin: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-                  color: askme ? Colors.red.withAlpha(10) : Colors.white,
+                  color:
+                      Colors.white, // Removed askme color since status=pending
                   child: ExpansionTile(
                     backgroundColor: Colors.grey.shade100,
                     collapsedIconColor: Colors.transparent,
                     iconColor: Colors.transparent,
                     tilePadding: EdgeInsets.only(left: 8.w, right: 8.w),
-                    collapsedBackgroundColor: askme
-                        ? Colors.red.withAlpha(30)
-                        : Colors.white,
+                    collapsedBackgroundColor: Colors.white,
                     initiallyExpanded: isExpanded, // FIXED: Sync with state
                     onExpansionChanged: (expanded) {
                       setState(() {
@@ -1091,9 +1322,7 @@ class _PreparingState extends State<Preparing> {
                                     '$pendingCount รายการ',
                                     style: styles(
                                       fontSize: 12.sp,
-                                      color: askme
-                                          ? Colors.red
-                                          : Colors.black54,
+                                      color: Colors.black54,
                                     ),
                                   ),
                                   SizedBox(height: 4.h),
@@ -1102,9 +1331,7 @@ class _PreparingState extends State<Preparing> {
                                     style: styles(
                                       fontSize: 14.sp,
                                       fontWeight: FontWeight.w600,
-                                      color: askme
-                                          ? Colors.red
-                                          : Colors.black54,
+                                      color: Colors.black54,
                                     ),
                                   ),
                                   SizedBox(height: 4.h),

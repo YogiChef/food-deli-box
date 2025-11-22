@@ -267,6 +267,19 @@ class _GeneralTabState extends State<GeneralTab>
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: mainColor,
+        automaticallyImplyLeading: false,
+        centerTitle: true,
+        title: Text(
+          'General Upload Products',
+          style: styles(
+            fontSize: 20.sp,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+      ),
       body: SingleChildScrollView(
         child: Consumer<ProductProvider>(
           builder: (context, provider, child) {
@@ -702,7 +715,7 @@ class _GeneralTabState extends State<GeneralTab>
                           child: Text(
                             'Schedule',
                             style: styles(
-                              color: Colors.pink.shade800,
+                              color: mainColor,
                               fontSize: 16.sp,
                               fontWeight: FontWeight.w500,
                             ),

@@ -22,6 +22,7 @@ Future<SharedPreferences> sharedPreferences = SharedPreferences.getInstance();
 double height = 825.h;
 double width = 375.w;
 
+final mainColor = const Color.fromARGB(255, 52, 190, 47);
 styles({
   double? letterSpacing,
   double? fontSize = 14,

@@ -141,13 +141,9 @@ class _DeliveredState extends State<Delivered> {
                 }
 
                 return Card(
-                  margin: EdgeInsets.only(
-                    left: 10.w,
-                    right: 10.w,
-                    bottom: 12.h,
-                  ),
+                  margin: EdgeInsets.only(left: 10.w, right: 10.w, bottom: 2.h),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(5.r),
+                    borderRadius: BorderRadius.circular(8.r),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.start,
@@ -191,15 +187,25 @@ class _DeliveredState extends State<Delivered> {
                                     ),
                                   ],
                                 ),
-                                Text(
-                                  isFullyDelivered
-                                      ? 'ส่งครบแล้ว'
-                                      : 'ส่งยังไม่ครบ',
-                                  style: styles(
-                                    fontSize: 13.sp,
+                                Container(
+                                  padding: EdgeInsets.only(
+                                    bottom: 4.h,
+                                    left: 12.w,
+                                    right: 12.w,
+                                  ),
+                                  alignment: Alignment.topCenter,
+                                  decoration: BoxDecoration(
                                     color: isFullyDelivered
                                         ? Colors.green
                                         : Colors.orange,
+                                    borderRadius: BorderRadius.circular(20.r),
+                                  ),
+                                  child: Text(
+                                    isFullyDelivered ? 'ครบแล้ว' : 'ยังไม่ครบ',
+                                    style: styles(
+                                      fontSize: 13.sp,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -210,7 +216,7 @@ class _DeliveredState extends State<Delivered> {
                               children: [
                                 Text(
                                   DateFormat('dd/MM/yy - kk:mm').format(
-                                    deliveredTime.toDate(),
+                                    timestamp.toDate(),
                                   ), // FIXED: ใช้ deliveredTime
                                   style: styles(
                                     fontSize: 11.sp,
@@ -218,7 +224,7 @@ class _DeliveredState extends State<Delivered> {
                                   ),
                                 ),
                                 Text(
-                                  '${acceptedItems.length}/${itemsRaw.length} รายการ (${isFullyDelivered ? 'ครบ' : 'ยังไม่ครบ'})',
+                                  '${acceptedItems.length}/${itemsRaw.length} รายการ',
                                   style: styles(
                                     fontSize: 12.sp,
                                     color: isFullyDelivered
