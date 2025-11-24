@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:vendor_box/models/vendor_model.dart';
 import 'package:vendor_box/pages/main_vendor_page.dart';
 import 'package:vendor_box/auth/vendor_auth.dart'; // นำเข้า VendorAuthPage
@@ -63,12 +64,74 @@ class _LandingPageState extends State<LandingPage> {
                 return const VendorAuthPage(); // ไป login/setup ถ้า doc ไม่มี (ไม่ไป register)
               }
 
-              VendorModel vendorsModel = VendorModel.fromJson(
-                vendorSnapshot.data!.data() as Map<String, dynamic>? ?? {},
+              final VendorModel vendorsModel = VendorModel.fromJson(
+                vendorSnapshot.data!.data() as Map<String, dynamic>,
               );
+
+              // ใหม่: เช็ค store hours
+              bool isOpenNow = true; // Default
+              if (vendorsModel.storeHours != null &&
+                  vendorsModel.storeHours!.isNotEmpty) {
+                final now = DateTime.now();
+                final dayKey = _getDayKey(now.weekday);
+                final dayHours = vendorsModel.storeHours![dayKey];
+                if (dayHours != null) {
+                  try {
+                    final openParts = (dayHours['open'] as String).split(':');
+                    final closeParts = (dayHours['close'] as String).split(':');
+                    final openHour = int.parse(openParts[0]);
+                    final openMinute = int.parse(openParts[1]);
+                    final closeHour = int.parse(closeParts[0]);
+                    final closeMinute = int.parse(closeParts[1]);
+                    final openTime = DateTime(
+                      now.year,
+                      now.month,
+                      now.day,
+                      openHour,
+                      openMinute,
+                    );
+                    final closeTime = DateTime(
+                      now.year,
+                      now.month,
+                      now.day,
+                      closeHour,
+                      closeMinute,
+                    );
+                    isOpenNow =
+                        now.isAfter(openTime) && now.isBefore(closeTime);
+                  } catch (e) {
+                    print('Error parsing store hours: $e');
+                  }
+                }
+              }
+
               if (vendorsModel.approved == true) {
                 print('Approved – Going to MainVendorPage (Home)'); // Debug
-                return const MainVendorPage(); // ไป home ถ้า approved
+                if (!isOpenNow) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.storage_outlined,
+                          size: 64,
+                          color: Colors.orange,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'ร้านปิดวันนี้ – ตรวจสอบ orders ในเวลาทำการ',
+                          style: styles(fontSize: 16.sp),
+                        ),
+                        SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => setState(() {}),
+                          child: Text('รีเฟรช'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return const MainVendorPage(); // ไป home ถ้า approved และเปิด
               } else {
                 print('Not approved – Showing pending UI'); // Debug
                 return Center(
@@ -130,5 +193,21 @@ class _LandingPageState extends State<LandingPage> {
         );
       },
     );
+  }
+
+  // ใหม่: Helper สำหรับ day key
+  String _getDayKey(int weekday) {
+    const days = [
+      'sunday',
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+    ];
+    return days[(weekday % 7) - 1 < 0
+        ? 6
+        : (weekday % 7) - 1]; // 1=Monday -> 'monday'
   }
 }

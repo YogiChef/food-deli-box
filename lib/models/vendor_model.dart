@@ -15,7 +15,9 @@ class VendorModel {
   final String taxNo;
   final String bankName;
   final String bankAccount;
-  final String promptPayId; // ใหม่: PromptPay ID (phone/email)
+  final String promptPayId;
+  final Map<String, dynamic>?
+  storeHours; // ใหม่: { 'monday': {'open': '09:00', 'close': '18:00'} }
 
   VendorModel({
     this.approved,
@@ -28,13 +30,14 @@ class VendorModel {
     required this.email,
     required this.image,
     required this.phone,
-    required this.state,
     required this.category,
+    required this.state,
     required this.taxStatus,
     required this.taxNo,
     required this.bankName,
     required this.bankAccount,
-    required this.promptPayId, // ใหม่
+    required this.promptPayId,
+    this.storeHours, // ใหม่
   });
 
   factory VendorModel.fromJson(Map<String, Object?> json) {
@@ -64,7 +67,8 @@ class VendorModel {
       taxNo: json['taxNo'] as String? ?? '',
       bankName: json['bankName'] as String? ?? '',
       bankAccount: json['bankAccount'] as String? ?? '',
-      promptPayId: json['promptPayId'] as String? ?? '', // ใหม่
+      promptPayId: json['promptPayId'] as String? ?? '',
+      storeHours: json['storeHours'] as Map<String, dynamic>?, // ใหม่
     );
   }
 
@@ -86,7 +90,8 @@ class VendorModel {
       'taxNo': taxNo,
       'bankName': bankName,
       'bankAccount': bankAccount,
-      'promptPayId': promptPayId, // ใหม่
+      'promptPayId': promptPayId,
+      'storeHours': storeHours, // ใหม่
     };
   }
 }

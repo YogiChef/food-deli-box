@@ -7,71 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:vendor_box/services/sevice.dart';
 
 class VendorController {
-  // Future<String> saveVendor(
-  //   String name,
-  //   String email,
-  //   String phone,
-  //   String addres,
-  //   String zipcode,
-  //   String countryValue,
-  //   String stateValue,
-  //   String cityValue,
-  //   String taxStatus,
-  //   String taxNumber,
-  //   Uint8List? image,
-  //   String category,
-  // ) async {
-  //   String res = 'some error occured';
-  //   try {
-  //     String storeImage = await uploadImagToStorage(image!);
-
-  //     await firestore.collection('vendors').doc(auth.currentUser!.uid).set({
-  //       'vendorId': auth.currentUser!.uid,
-  //       'category': category,
-  //       'bussinessName': name,
-  //       'email': email,
-  //       'phone': phone,
-  //       'address': addres,
-  //       'vzipcode': zipcode,
-  //       'country': countryValue,
-  //       'state': stateValue,
-  //       'city': cityValue,
-  //       'taxStatus': taxStatus,
-  //       'taxNo': taxNumber,
-  //       'image': storeImage,
-  //       'approved': false,
-  //     });
-  //   } catch (e) {
-  //     Fluttertoast.showToast(msg: e.toString());
-  //   }
-  //   return res;
-  // }
-
-  // loginUser(String email, String password) async {
-  //   try {
-  //     if (email.isNotEmpty && password.isNotEmpty) {
-  //       await auth.signInWithEmailAndPassword(email: email, password: password);
-
-  //       Fluttertoast.showToast(msg: 'you are login success');
-  //     } else {
-  //       Fluttertoast.showToast(msg: 'Please Fields must not be empty');
-  //     }
-  //   } catch (e) {
-  //     Fluttertoast.showToast(msg: e.toString());
-  //   }
-  // }
-
-  // pickStoreImage(ImageSource source) async {
-  //   final ImagePicker _imgPicker = ImagePicker();
-  //   XFile? _file = await _imgPicker.pickImage(source: source);
-
-  //   if (_file != null) {
-  //     return await _file.readAsBytes();
-  //   } else {
-  //     Fluttertoast.showToast(msg: 'No image seleted');
-  //   }
-  // }
-
   loginUser(String email, String password) async {
     try {
       if (email.isNotEmpty && password.isNotEmpty) {
@@ -111,6 +46,19 @@ class VendorController {
     } catch (e) {
       Fluttertoast.showToast(msg: 'อัปโหลดรูปภาพล้มเหลว: $e');
       throw e;
+    }
+  }
+
+  // ใหม่: บันทึก store hours
+  Future<void> saveStoreHours(Map<String, dynamic> hours) async {
+    try {
+      await firestore.collection('vendors').doc(auth.currentUser!.uid).update({
+        'storeHours': hours,
+      });
+      Fluttertoast.showToast(msg: 'บันทึกเวลาร้านค้าสำเร็จ');
+    } catch (e) {
+      Fluttertoast.showToast(msg: 'เกิดข้อผิดพลาด: $e');
+      rethrow;
     }
   }
 }

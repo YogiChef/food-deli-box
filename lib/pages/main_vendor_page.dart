@@ -9,6 +9,7 @@ import 'package:vendor_box/pages/nav_pages/logout.dart';
 import 'package:vendor_box/pages/nav_pages/orders.dart';
 import 'package:badges/badges.dart' as badges;
 import 'package:vendor_box/pages/nav_pages/upload_page.dart';
+import 'package:vendor_box/pages/nav_pages/store_settings_page.dart'; // ใหม่: Import StoreSettingsPage
 import 'package:vendor_box/services/sevice.dart';
 
 class MainVendorPage extends StatefulWidget {
@@ -35,11 +36,13 @@ class _MainVendorPageState extends State<MainVendorPage> {
   }
 
   int _pageIndex = 0;
+  // อัปเดต: เพิ่ม StoreSettingsPage ใน list (index 4, ก่อน Logout)
   final List<Widget> _page = [
     const EarningPage(),
     const GeneralTab(),
     const EditPage(),
     const OrderPage(),
+    const StoreSettingsPage(), // ใหม่
     const LogOutPage(),
   ];
 
@@ -86,6 +89,7 @@ class _MainVendorPageState extends State<MainVendorPage> {
               });
             },
             selectedItemColor: mainColor,
+            // อัปเดต: เพิ่ม item สำหรับ Settings (index 4)
             items: [
               BottomNavigationBarItem(
                 icon: Icon(
@@ -120,7 +124,15 @@ class _MainVendorPageState extends State<MainVendorPage> {
               ),
               BottomNavigationBarItem(
                 icon: Icon(
-                  _pageIndex == 4 ? IconlyBold.logout : IconlyLight.logout,
+                  _pageIndex == 4
+                      ? IconlyBold.setting
+                      : IconlyLight.setting, // ใหม่: Settings icon
+                ),
+                label: 'Settings',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(
+                  _pageIndex == 5 ? IconlyBold.logout : IconlyLight.logout,
                 ),
                 label: 'Sign Out',
               ),
