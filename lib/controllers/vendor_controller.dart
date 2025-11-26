@@ -61,4 +61,11 @@ class VendorController {
       rethrow;
     }
   }
+
+  Future<void> saveTemporaryClose(bool isClosed) async {
+    final uid = auth.currentUser!.uid;
+    await firestore.collection('vendors').doc(uid).update({
+      'temporarilyClosed': isClosed,
+    });
+  }
 }

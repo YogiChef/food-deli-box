@@ -7,8 +7,10 @@ import 'package:vendor_box/services/sevice.dart'; // สำหรับ styles()
 class TimeSelectorWidget extends StatefulWidget {
   final String dayLabel;
   final Function(String day, String? open, String? close) onSave;
+  final Function(bool)? onClosed; // ถ้าต้องการ
   final String? currentOpen;
   final String? currentClose;
+  final bool currentClosed;
 
   const TimeSelectorWidget({
     super.key,
@@ -16,6 +18,8 @@ class TimeSelectorWidget extends StatefulWidget {
     required this.onSave,
     this.currentOpen,
     this.currentClose,
+    this.onClosed,
+    this.currentClosed = false,
   });
 
   @override
@@ -23,19 +27,20 @@ class TimeSelectorWidget extends StatefulWidget {
 }
 
 class _TimeSelectorWidgetState extends State<TimeSelectorWidget> {
+  bool isClosed = false;
   TimeOfDay? _openTime;
   TimeOfDay? _closeTime;
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill if provided
-    if (widget.currentOpen != null) {
-      _openTime = _parseTime(widget.currentOpen!);
-    }
-    if (widget.currentClose != null) {
-      _closeTime = _parseTime(widget.currentClose!);
-    }
+    isClosed = widget.currentClosed;
+    _openTime = widget.currentOpen != null
+        ? _parseTime(widget.currentOpen!)
+        : null;
+    _closeTime = widget.currentClose != null
+        ? _parseTime(widget.currentClose!)
+        : null;
   }
 
   TimeOfDay? _parseTime(String timeStr) {
@@ -141,99 +146,130 @@ class _TimeSelectorWidgetState extends State<TimeSelectorWidget> {
   Widget build(BuildContext context) {
     final openText = _openTime != null
         ? _openTime!.format(context)
-        : (widget.currentOpen ?? 'เลือกเวลาเปิด');
+        : (widget.currentOpen ?? 'เปิด');
     final closeText = _closeTime != null
         ? _closeTime!.format(context)
-        : (widget.currentClose ?? 'เลือกเวลาปิด');
+        : (widget.currentClose ?? 'ปิด');
 
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
       child: Padding(
-        padding: EdgeInsets.all(16.w),
+        padding: EdgeInsets.only(
+          top: 6.h,
+          bottom: 6.h,
+          left: 12.w,
+          right: 12.w,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              widget.dayLabel,
-              style: styles(
-                fontSize: 16.sp,
-                fontWeight: FontWeight.w600,
-                color: mainColor,
-              ),
-            ),
-            SizedBox(height: 12.h),
             Row(
               children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _selectTime(true),
-                    icon: const Icon(Icons.access_time, size: 20),
-                    label: Text(
-                      openText,
-                      style: styles(
-                        fontSize: 14.sp,
-                        fontWeight: _openTime != null
-                            ? FontWeight.w500
-                            : FontWeight.normal,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade50,
-                      foregroundColor: Colors.green.shade700,
-                      padding: EdgeInsets.symmetric(
-                        vertical: 12.h,
-                        horizontal: 16.w,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6.r),
-                      ),
-                    ),
+                Text(
+                  widget.dayLabel,
+                  style: styles(
+                    fontSize: 14.sp,
+                    fontWeight: FontWeight.w600,
+                    color: mainColor,
                   ),
                 ),
-                SizedBox(width: 8.w),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _selectTime(false),
-                    icon: const Icon(Icons.access_time, size: 20),
-                    label: Text(
-                      closeText,
-                      style: styles(
-                        fontSize: 14.sp,
-                        fontWeight: _closeTime != null
-                            ? FontWeight.w500
-                            : FontWeight.normal,
-                        color: Colors.red.shade700,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange.shade50,
-                      foregroundColor: Colors.orange.shade700,
-                      padding: EdgeInsets.symmetric(
-                        vertical: 12.h,
-                        horizontal: 16.w,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6.r),
-                      ),
-                    ),
+                const Spacer(),
+                Transform.scale(
+                  scale: 0.75.r,
+                  child: Switch(
+                    padding: EdgeInsets.all(2.w),
+                    value: !isClosed, // true = เปิด (switch on)
+                    onChanged: (value) {
+                      setState(() {
+                        isClosed = !value; // value=true=เปิด -> _isClosed=false
+                      });
+                      widget.onClosed?.call(isClosed); // Call parent
+                      if (isClosed) {
+                        _openTime = null;
+                        _closeTime = null;
+                      }
+                    },
+                    activeThumbColor: mainColor, // สีเมื่อเปิด
+                    activeTrackColor: mainColor.withAlpha(50),
+                    inactiveThumbColor: Colors.red, // สีเมื่อปิด
+                    inactiveTrackColor: Colors.red.withAlpha(50),
+                    trackOutlineColor: WidgetStateProperty.all(Colors.grey),
                   ),
                 ),
               ],
             ),
-            // แก้: แสดง partial/full – ถ้าเลือก open เท่านั้นแสดง "เปิด: XX:XX", close เท่านั้น "ปิด: XX:XX", ทั้งคู่ "เวลา: open - close"
+            Padding(
+              padding: EdgeInsets.only(left: 24.w),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _selectTime(true),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 13.sp,
+                            color: Colors.black87,
+                          ),
+                          SizedBox(width: 4.w),
+                          Text(
+                            openText,
+                            style: styles(
+                              fontSize: 14.sp,
+                              fontWeight: _openTime != null
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _selectTime(false),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 13.sp,
+                            color: Colors.red.shade700,
+                          ),
+                          SizedBox(width: 4.w),
+                          Text(
+                            closeText,
+                            style: styles(
+                              fontSize: 14.sp,
+                              fontWeight: _closeTime != null
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                              color: Colors.red.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             if (_openTime != null || _closeTime != null) ...[
-              SizedBox(height: 8.h),
-              Text(
-                _openTime != null && _closeTime != null
-                    ? 'เวลา: ${_formatTime(_openTime)} - ${_formatTime(_closeTime)}'
-                    : _openTime != null
-                    ? 'เปิด: ${_formatTime(_openTime)}'
-                    : 'ปิด: ${_formatTime(_closeTime)}',
-                style: styles(
-                  fontSize: 12.sp,
-                  color: Colors.grey.shade600,
-                  fontWeight: FontWeight.w400,
+              Padding(
+                padding: EdgeInsets.only(left: 24.w),
+                child: Text(
+                  _openTime != null && _closeTime != null
+                      ? 'เวลา: ${_formatTime(_openTime)} - ${_formatTime(_closeTime)}'
+                      : _openTime != null
+                      ? 'เปิด: ${_formatTime(_openTime)}'
+                      : 'ปิด: ${_formatTime(_closeTime)}',
+                  style: styles(
+                    fontSize: 12.sp,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
               ),
             ],

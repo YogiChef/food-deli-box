@@ -3,6 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart'; // เพิ่ม: สำหรับ addPostFrameCallback
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:vendor_box/controllers/vendor_controller.dart';
 import 'package:vendor_box/services/sevice.dart';
@@ -21,8 +22,8 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Map<String, Map<String, String?>> hours =
-      {}; // แก้: Type Map<String, Map<String, String?>> เพื่อ allow null (compile ผ่าน)
+  // แก้: Type Map<String, Map<String, dynamic>> เพื่อรองรับ 'closed': bool
+  Map<String, Map<String, dynamic>> hours = {};
   final List<String> _days = [
     'Monday',
     'Tuesday',
@@ -33,6 +34,8 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
     'Sunday',
   ];
   String? _currentStatus;
+  bool _isTemporarilyClosed =
+      false; // เพิ่ม: สถานะปิดชั่วคราว (default false = เปิด)
 
   @override
   void initState() {
@@ -40,9 +43,31 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
   }
 
   void _updateCurrentStatus() {
+    // เพิ่ม: เช็ค temporary ก่อน (override ทุกอย่าง)
+    if (_isTemporarilyClosed) {
+      if (mounted) {
+        // เพิ่ม: เช็ค mounted เพื่อ avoid setState after dispose
+        setState(() {
+          _currentStatus = 'ปิดชั่วคราว';
+        });
+      }
+      return;
+    }
+
     final now = DateTime.now();
     final dayKey = _getDayKey(now.weekday);
     final dayEntry = hours[dayKey];
+
+    // เพิ่ม: เช็ค closed ต่อวันก่อน
+    if (dayEntry?['closed'] == true) {
+      if (mounted) {
+        setState(() {
+          _currentStatus = 'ปิดทั้งวัน';
+        });
+      }
+      return;
+    }
+
     if (dayEntry == null ||
         (dayEntry['open'] == null && dayEntry['close'] == null)) {
       _currentStatus = 'Always Open';
@@ -71,13 +96,16 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
         int.parse(closeParts[0]),
         int.parse(closeParts[1]),
       );
-      setState(() {
-        _currentStatus = now.isAfter(openTime) && now.isBefore(closeTime)
-            ? 'Open Now'
-            : 'Closed';
-      });
+      if (mounted) {
+        setState(() {
+          _currentStatus = now.isAfter(openTime) && now.isBefore(closeTime)
+              ? 'Open Now'
+              : 'Closed';
+        });
+      }
     } catch (e) {
       _currentStatus = 'Invalid Hours';
+      print('Update status error: $e'); // เพิ่ม debug
     }
   }
 
@@ -94,19 +122,35 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
     return days[(weekday % 7) - 1 < 0 ? 6 : (weekday % 7) - 1];
   }
 
-  void _onSaveTime(String day, String? open, String? close) {
+  // แก้: เพิ่ม param bool? isClosed สำหรับ handle toggle closed ต่อวัน
+  void _onSaveTime(String day, String? open, String? close, bool? isClosed) {
     final lowerDay = day.toLowerCase();
-    final Map<String, String?> dayEntry =
-        hours[lowerDay] ?? <String, String?>{'open': null, 'close': null};
+    final Map<String, dynamic> dayEntry =
+        hours[lowerDay] ??
+        <String, dynamic>{'open': null, 'close': null, 'closed': false};
 
     bool hasChange = false;
 
-    if (open != null) {
+    // เพิ่ม: Handle closed
+    if (isClosed != null) {
+      dayEntry['closed'] = isClosed;
+      hasChange = true;
+      if (isClosed) {
+        dayEntry['open'] = null; // Clear times ถ้าปิด
+        dayEntry['close'] = null;
+        print('Set $day to closed');
+      } else {
+        print('Set $day to open');
+      }
+    }
+
+    // Handle open/close times (skip ถ้า closed)
+    if (!dayEntry['closed'] && open != null) {
       dayEntry['open'] = open;
       hasChange = true;
       print('Updated open for $day: $open');
     }
-    if (close != null) {
+    if (!dayEntry['closed'] && close != null) {
       dayEntry['close'] = close;
       hasChange = true;
       print('Updated close for $day: $close');
@@ -116,17 +160,21 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
       setState(() {
         hours[lowerDay] = dayEntry;
       });
-      _updateCurrentStatus();
-    } else if (dayEntry['open'] == null && dayEntry['close'] == null) {
+      _updateCurrentStatus(); // เรียกที่นี่ OK เพราะไม่ใช่ใน build
+    } else if (dayEntry['open'] == null &&
+        dayEntry['close'] == null &&
+        !dayEntry['closed']) {
       setState(() {
         hours.remove(lowerDay);
       });
     }
 
-    // Validation (skip ถ้า null)
-    if (dayEntry['open'] != null && dayEntry['close'] != null) {
-      final openStr = dayEntry['open']!;
-      final closeStr = dayEntry['close']!;
+    // Validation (skip ถ้า closed หรือ null)
+    if (!dayEntry['closed'] &&
+        dayEntry['open'] != null &&
+        dayEntry['close'] != null) {
+      final openStr = dayEntry['open'] as String;
+      final closeStr = dayEntry['close'] as String;
       if (openStr.contains(':') && closeStr.contains(':')) {
         try {
           final openHour = int.parse(openStr.split(':')[0]);
@@ -147,9 +195,51 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
     }
   }
 
+  // เพิ่ม: Method สำหรับ toggle temporary close
+  Future<void> _toggleTemporaryClose(bool isClosed) async {
+    setState(() {
+      _isTemporarilyClosed = isClosed;
+    });
+
+    try {
+      // สมมติ VendorController มี method นี้; ถ้าไม่มี ให้เซฟตรง: _firestore.collection('vendors').doc(_auth.currentUser!.uid).update({'temporarilyClosed': isClosed});
+      await _vendorController.saveTemporaryClose(isClosed);
+      await _firestore.collection('vendors').doc(_auth.currentUser!.uid).update(
+        {
+          'temporarilyClosed': isClosed, // true = ปิด
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+      );
+
+      _updateCurrentStatus(); // เรียกที่นี่ OK
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isClosed ? 'ปิดร้านชั่วคราวแล้ว' : 'เปิดร้านแล้ว'),
+          backgroundColor: isClosed ? Colors.orange : Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      print('Toggle error: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
+      // Rollback state ถ้า error
+      setState(() {
+        _isTemporarilyClosed = !isClosed;
+      });
+    }
+  }
+
   Future<void> _saveHours() async {
     if (hours.values
-        .where((entry) => entry['open'] != null || entry['close'] != null)
+        .where(
+          (entry) =>
+              entry['open'] != null ||
+              entry['close'] != null ||
+              entry['closed'] == true,
+        )
         .isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('กรุณาเลือกเวลาอย่างน้อยหนึ่งวัน')),
@@ -157,9 +247,10 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
       return;
     }
     try {
-      await _vendorController.saveStoreHours(
-        hours,
-      ); // Save Map<String, Map<String, String?>> (Firestore handle null OK)
+      // เพิ่ม: เซฟ temporary close ร่วม (ถ้า Controller รองรับ)
+      await _vendorController.saveTemporaryClose(_isTemporarilyClosed);
+
+      await _vendorController.saveStoreHours(hours); // Save รวม closed field
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('บันทึกเวลาสำเร็จ! สถานะปัจจุบัน: $_currentStatus'),
@@ -179,14 +270,29 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
     final vendorStream = _firestore.collection('vendors').doc(uid).snapshots();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'ตั้งค่าเวลาร้านค้า',
-          style: styles(fontSize: 18.sp, fontWeight: FontWeight.w600),
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(56.0), // สูงปกติ
+        child: ClipRRect(
+          // Clip เฉพาะด้านล่าง
+          borderRadius: BorderRadius.only(
+            bottomLeft: Radius.circular(12.0),
+            bottomRight: Radius.circular(12.0),
+          ),
+          child: AppBar(
+            title: Text(
+              'ตั้งค่าเวลาร้านค้า',
+              style: styles(
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            backgroundColor: mainColor,
+            foregroundColor: Colors.white,
+            centerTitle: true,
+            elevation: 0,
+          ),
         ),
-        backgroundColor: mainColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: vendorStream,
@@ -202,20 +308,34 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
           }
 
           final vendorData = snapshot.data!.data() as Map<String, dynamic>;
-          // แก้ไขหลัก: โหลดข้อมูลเฉพาะตอนแรก (hours.isEmpty) เพื่อไม่ให้ overwrite การเปลี่ยนแปลง local ทุกครั้งที่ rebuild
+          // แก้: โหลดข้อมูลเฉพาะตอนแรก (hours.isEmpty) เพื่อไม่ให้ overwrite การเปลี่ยนแปลง local
           if (hours.isEmpty) {
-            final Map<String, Map<String, String?>> loadedHours =
-                Map<String, Map<String, String?>>.from(
+            final Map<String, Map<String, dynamic>> loadedHours =
+                Map<String, Map<String, dynamic>>.from(
                   (vendorData['storeHours'] as Map<String, dynamic>?)?.map(
                         (k, v) => MapEntry(
                           k,
-                          Map<String, String?>.from(v as Map<String, dynamic>),
+                          Map<String, dynamic>.from(v as Map<String, dynamic>)
+                            ..putIfAbsent(
+                              'closed',
+                              () => false,
+                            ), // เพิ่ม default closed: false
                         ),
                       ) ??
                       {},
                 );
             hours = loadedHours;
-            _updateCurrentStatus();
+
+            // เพิ่ม: โหลด temporary close (ใช้ temporarilyClosed เป็นหลัก, ignore isTemporarilyOpen ถ้าซ้ำ)
+            _isTemporarilyClosed = vendorData['temporarilyClosed'] ?? false;
+            print('Loaded temporary closed: $_isTemporarilyClosed'); // Debug
+
+            // แก้หลัก: ใช้ addPostFrameCallback เพื่อ delay _updateCurrentStatus หลัง build เสร็จ
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _updateCurrentStatus();
+              }
+            });
           }
 
           return SingleChildScrollView(
@@ -223,35 +343,67 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ... Current status card เดิม
-                SizedBox(height: 20.h),
+                // Current status card (สมมติมี code เดิม; ถ้าไม่มีให้เพิ่ม Card แสดง _currentStatus)
                 Text(
                   'เลือกเวลาทำการรายวัน',
                   style: styles(fontSize: 16.sp, fontWeight: FontWeight.w600),
                 ),
                 SizedBox(height: 12.h),
-                // แก้: Key เปลี่ยนเมื่อ hours update เพื่อ force rebuild child (แสดง props ใหม่)
-                ..._days.map(
-                  (day) => Padding(
-                    padding: EdgeInsets.only(bottom: 12.h),
+
+                // แก้: ส่ง props สำหรับ closed และ callback ใหม่ (fix null safety)
+                ..._days.map((day) {
+                  final lowerDay = day.toLowerCase();
+                  final dayEntry =
+                      hours[lowerDay] ??
+                      {
+                        'open': null,
+                        'close': null,
+                        'closed': false,
+                      }; // Default ครบ
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: 6.h),
                     child: TimeSelectorWidget(
                       key: ValueKey(
-                        '${day}-${hours[day.toLowerCase()]?['open']}-${hours[day.toLowerCase()]?['close']}',
-                      ), // แก้: Key จาก hours เพื่อ rebuild เมื่อ props เปลี่ยน
+                        '${day}-${dayEntry['closed']}-${dayEntry['open'] ?? ''}-${dayEntry['close'] ?? ''}', // Safe key (null to empty string)
+                      ),
                       dayLabel: day,
-                      onSave: _onSaveTime,
-                      currentOpen: hours[day.toLowerCase()]?['open'],
-                      currentClose: hours[day.toLowerCase()]?['close'],
+                      onSave: (d, o, c) =>
+                          _onSaveTime(d, o, c, null), // สำหรับ time change
+                      onClosed: (isClosed) => _onSaveTime(
+                        day,
+                        null,
+                        null,
+                        isClosed,
+                      ), // สำหรับ toggle closed
+                      // แก้: ใช้ dayEntry โดยตรง – no null error
+                      currentOpen: !(dayEntry['closed'] as bool)
+                          ? (dayEntry['open'] as String?)
+                          : null,
+                      currentClose: !(dayEntry['closed'] as bool)
+                          ? (dayEntry['close'] as String?)
+                          : null,
+                      currentClosed: dayEntry['closed'] as bool,
+                    ),
+                  );
+                }).toList(),
+
+                SizedBox(height: 12.h),
+                Center(
+                  child: SizedBox(
+                    width: width * 0.9.w,
+                    child: BottonWidget(
+                      label: 'บันทึก',
+                      style: styles(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                      icon: Icons.save,
+                      press: _saveHours,
+                      color: mainColor,
+                      height: 50.h,
                     ),
                   ),
-                ),
-                SizedBox(height: 24.h),
-                BottonWidget(
-                  label: 'บันทึกการเปลี่ยนแปลง',
-                  icon: Icons.save,
-                  press: _saveHours,
-                  color: mainColor,
-                  height: 50.h,
                 ),
                 SizedBox(height: 20.h),
               ],

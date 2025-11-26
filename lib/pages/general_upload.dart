@@ -267,16 +267,27 @@ class _GeneralTabState extends State<GeneralTab>
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: mainColor,
-        automaticallyImplyLeading: false,
-        centerTitle: true,
-        title: Text(
-          'General Upload Products',
-          style: styles(
-            fontSize: 20.sp,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(56.0), // สูงปกติ
+        child: ClipRRect(
+          // Clip เฉพาะด้านล่าง
+          borderRadius: BorderRadius.only(
+            bottomLeft: Radius.circular(12.0),
+            bottomRight: Radius.circular(12.0),
+          ),
+          child: AppBar(
+            title: Text(
+              'อัพโหลดสินค้า',
+              style: styles(
+                fontSize: 18.sp,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            backgroundColor: mainColor,
+            foregroundColor: Colors.white,
+            centerTitle: true,
+            elevation: 0,
           ),
         ),
       ),
@@ -372,47 +383,50 @@ class _GeneralTabState extends State<GeneralTab>
                     ),
                   ),
                   // ลบ TextButton Upload จากตรงนี้ – รวมในปุ่ม Save แล้ว
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    padding: EdgeInsets.only(
-                      left: 20.w,
-                      right: 20.w,
-                      bottom: 10.w,
-                    ),
-                    icon: const Icon(Icons.keyboard_arrow_down),
-                    decoration: InputDecoration(
-                      prefixIcon: IconButton(
-                        icon: const Icon(Icons.inventory),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const TypeTab(),
-                            ),
-                          );
-                        },
+                  Padding(
+                    padding: EdgeInsets.only(left: 20.w, right: 20.w),
+                    child: DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      padding: EdgeInsets.only(
+                        left: 20.w,
+                        right: 20.w,
+                        bottom: 10.w,
                       ),
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(
-                          color: Colors.yellow.shade900,
-                          width: 2,
+                      icon: const Icon(Icons.keyboard_arrow_down),
+                      decoration: InputDecoration(
+                        prefixIcon: IconButton(
+                          icon: const Icon(Icons.inventory),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const TypeTab(),
+                              ),
+                            );
+                          },
+                        ),
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(
+                            color: Colors.yellow.shade900,
+                            width: 2,
+                          ),
+                        ),
+                        errorBorder: const UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.red, width: 2),
                         ),
                       ),
-                      errorBorder: const UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.red, width: 2),
-                      ),
+                      hint: Text('Select Type', style: styles(fontSize: 12.sp)),
+                      items: _categoryList.map<DropdownMenuItem<String>>((e) {
+                        return DropdownMenuItem(value: e, child: Text(e));
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          provider.getFormData(type: value);
+                        }
+                      },
+                      validator: (value) =>
+                          value == null ? 'กรุณาเลือกประเภทสินค้า' : null,
                     ),
-                    hint: Text('Select Type', style: styles(fontSize: 12.sp)),
-                    items: _categoryList.map<DropdownMenuItem<String>>((e) {
-                      return DropdownMenuItem(value: e, child: Text(e));
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        provider.getFormData(type: value);
-                      }
-                    },
-                    validator: (value) =>
-                        value == null ? 'กรุณาเลือกประเภทสินค้า' : null,
                   ),
                   InputTextfield(
                     textInputType: TextInputType.text,

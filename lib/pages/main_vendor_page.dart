@@ -11,6 +11,7 @@ import 'package:badges/badges.dart' as badges;
 import 'package:vendor_box/pages/nav_pages/upload_page.dart';
 import 'package:vendor_box/pages/nav_pages/store_settings_page.dart'; // ใหม่: Import StoreSettingsPage
 import 'package:vendor_box/services/sevice.dart';
+import 'package:vendor_box/services/store_service.dart';
 
 class MainVendorPage extends StatefulWidget {
   const MainVendorPage({super.key});

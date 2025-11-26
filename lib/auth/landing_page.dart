@@ -15,9 +15,6 @@ class LandingPage extends StatefulWidget {
 }
 
 class _LandingPageState extends State<LandingPage> {
-  final FirebaseAuth auth =
-      FirebaseAuth.instance; // แก้: เพิ่ม declaration สำหรับ signOut
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
@@ -77,80 +74,33 @@ class _LandingPageState extends State<LandingPage> {
                   vendorsModel.storeHours!.isNotEmpty) {
                 final now = DateTime.now();
                 final dayKey = _getDayKey(now.weekday);
-                print(
-                  'Debug: Current dayKey = $dayKey',
-                ); // เพิ่ม debug เพื่อเช็ควัน
                 final dayHours = vendorsModel.storeHours![dayKey];
-                print('Debug: dayHours = $dayHours'); // Debug ข้อมูลวันนั้น
                 if (dayHours != null) {
-                  final closed =
-                      dayHours['closed'] as bool? ??
-                      false; // ใหม่: เช็ค closed flag
-                  if (closed == true) {
-                    isOpenNow = false; // ปิดวันนี้ทันที
-                    print('Debug: Closed flag = true, isOpenNow = false');
-                    // Skip เช็คเวลา
-                  }
-                  final openStr = dayHours['open'] as String?;
-                  final closeStr = dayHours['close'] as String?;
-                  // แก้: Handle null ก่อน cast เพื่อไม่ throw error
-                  if (openStr != null && closeStr != null) {
-                    try {
-                      final openParts = openStr.split(':');
-                      final closeParts = closeStr.split(':');
-                      final openHour = int.parse(openParts[0]);
-                      final openMinute = int.parse(openParts[1]);
-                      final closeHour = int.parse(closeParts[0]);
-                      final closeMinute = int.parse(closeParts[1]);
-                      final openTime = DateTime(
-                        now.year,
-                        now.month,
-                        now.day,
-                        openHour,
-                        openMinute,
-                      );
-                      final closeTime = DateTime(
-                        now.year,
-                        now.month,
-                        now.day,
-                        closeHour,
-                        closeMinute,
-                      );
-                      isOpenNow =
-                          now.isAfter(openTime) && now.isBefore(closeTime);
-                      print(
-                        'Debug: isOpenNow = $isOpenNow, now=$now, open=$openTime, close=$closeTime',
-                      ); // Debug สถานะ
-                    } catch (e) {
-                      print('Error parsing store hours: $e');
-                      isOpenNow = true; // Fallback ชัดเจน
-                    }
-                  } else {
-                    print(
-                      'Debug: Partial hours – open=$openStr, close=$closeStr',
-                    ); // Debug partial
-                    // ถ้า partial: assume open ถ้า open null หรือ close null
-                    if (openStr == null)
-                      isOpenNow = true; // เปิดทั้งวัน
-                    else if (closeStr == null) {
-                      // เปิดหลัง openTime ถึงสิ้นวัน
-                      try {
-                        final openParts = openStr.split(':');
-                        final openHour = int.parse(openParts[0]);
-                        final openMinute = int.parse(openParts[1]);
-                        final openTime = DateTime(
-                          now.year,
-                          now.month,
-                          now.day,
-                          openHour,
-                          openMinute,
-                        );
-                        isOpenNow = now.isAfter(openTime);
-                      } catch (e) {
-                        print('Error parsing open: $e');
-                        isOpenNow = true;
-                      }
-                    }
+                  try {
+                    final openParts = (dayHours['open'] as String).split(':');
+                    final closeParts = (dayHours['close'] as String).split(':');
+                    final openHour = int.parse(openParts[0]);
+                    final openMinute = int.parse(openParts[1]);
+                    final closeHour = int.parse(closeParts[0]);
+                    final closeMinute = int.parse(closeParts[1]);
+                    final openTime = DateTime(
+                      now.year,
+                      now.month,
+                      now.day,
+                      openHour,
+                      openMinute,
+                    );
+                    final closeTime = DateTime(
+                      now.year,
+                      now.month,
+                      now.day,
+                      closeHour,
+                      closeMinute,
+                    );
+                    isOpenNow =
+                        now.isAfter(openTime) && now.isBefore(closeTime);
+                  } catch (e) {
+                    print('Error parsing store hours: $e');
                   }
                 }
               }
@@ -168,10 +118,7 @@ class _LandingPageState extends State<LandingPage> {
                           color: Colors.orange,
                         ),
                         SizedBox(height: 16),
-                        Text(
-                          'ร้านปิดวันนี้ – ตรวจสอบ orders ในเวลาทำการ',
-                          style: styles(fontSize: 16.sp),
-                        ),
+                        Text('วันนี้ร้านปิด', style: styles(fontSize: 16.sp)),
                         SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: () => setState(() {}),
@@ -245,7 +192,7 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
-  // แก้: Helper สำหรับ day key ให้ถูกต้อง (เหมือนใน DeliService)
+  // ใหม่: Helper สำหรับ day key
   String _getDayKey(int weekday) {
     const days = [
       'sunday',
@@ -256,7 +203,8 @@ class _LandingPageState extends State<LandingPage> {
       'friday',
       'saturday',
     ];
-    final int index = (weekday == 7) ? 0 : weekday;
-    return days[index];
+    return days[(weekday % 7) - 1 < 0
+        ? 6
+        : (weekday % 7) - 1]; // 1=Monday -> 'monday'
   }
 }
