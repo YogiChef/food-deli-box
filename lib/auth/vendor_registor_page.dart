@@ -1636,7 +1636,7 @@ class _VendorRegistorPageState extends State<VendorRegistorPage> {
   }
 
   selectCameca() async {
-    Uint8List img = await vendorController.pickStoreImage(ImageSource.camera);
+    Uint8List? img = await vendorController.pickStoreImage(ImageSource.camera);
     setState(() {
       image = img;
     });

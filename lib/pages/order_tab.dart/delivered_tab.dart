@@ -308,8 +308,13 @@ class _DeliveredState extends State<Delivered> {
                                   final double price =
                                       (item['price'] as num?)?.toDouble() ??
                                       0.0;
-                                  final double? extraPrice =
+                                  final double? optionPrice =
                                       (item['extraPrice'] as num?)?.toDouble();
+                                  final double? extraPrice =
+                                      ((item['extraPrice'] as num?)
+                                              ?.toDouble() ??
+                                          00) *
+                                      quantity;
                                   final List? imagesRaw =
                                       item['imageUrl'] as List?;
                                   final String productImage =
@@ -317,8 +322,7 @@ class _DeliveredState extends State<Delivered> {
                                           imagesRaw.isNotEmpty)
                                       ? imagesRaw.first.toString()
                                       : '';
-                                  final double itemSubtotal =
-                                      (price + (extraPrice ?? 0.0)) * quantity;
+                                  final double itemSubtotal = price * quantity;
                                   final List selectedOptionsRaw =
                                       item['selectedOptions'] ?? [];
                                   final String optionsText = selectedOptionsRaw
@@ -439,12 +443,26 @@ class _DeliveredState extends State<Delivered> {
                                                   ),
                                                   if (extraPrice != null &&
                                                       extraPrice > 0) ...[
-                                                    Text(
-                                                      'Extra: +฿${extraPrice.toStringAsFixed(2)}',
-                                                      style: styles(
-                                                        fontSize: 12.sp,
-                                                        color: Colors.orange,
-                                                      ),
+                                                    Row(
+                                                      children: [
+                                                        Text(
+                                                          'Extra: ฿$optionPrice x $quantity',
+                                                          style: styles(
+                                                            fontSize: 12.sp,
+                                                            color:
+                                                                Colors.orange,
+                                                          ),
+                                                        ),
+                                                        Spacer(),
+                                                        Text(
+                                                          '= ฿${extraPrice.toStringAsFixed(2)}',
+                                                          style: styles(
+                                                            fontSize: 12.sp,
+                                                            color:
+                                                                Colors.orange,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
                                                   ],
                                                 ],

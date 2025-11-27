@@ -84,6 +84,16 @@ class _TimeSelectorWidgetState extends State<TimeSelectorWidget> {
                 fontWeight: FontWeight.w600,
                 color: Colors.black, // สีตัวเลข (optional)
               ),
+              hourMinuteColor: Colors.red.shade50, // สีพื้นหลังชั่วโมง/นาที
+              backgroundColor: Colors.grey.shade100,
+              dialBackgroundColor: Colors.amber.shade200,
+              dialTextColor: Colors.pink, // สีพื้นหลังของ TimePicker
+              helpTextStyle: styles(
+                // ข้อความช่วยเหลือ (เช่น "SELECT TIME")
+                fontSize: 14.sp,
+                fontWeight: FontWeight.w500,
+                color: Colors.black54,
+              ),
               dialTextStyle: styles(
                 // ตัวเลขรอบนาฬิกา (ถ้าใช้โหมด dial)
                 fontSize: 14.sp, // ปรับขนาดเล็กลงถ้าต้องการ
@@ -100,6 +110,7 @@ class _TimeSelectorWidgetState extends State<TimeSelectorWidget> {
               titleTextStyle: styles(
                 fontSize: 16.sp, // ขนาดหัวข้อ "Select Time"
                 fontWeight: FontWeight.w600,
+                color: Colors.black,
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12.r),
@@ -155,12 +166,7 @@ class _TimeSelectorWidgetState extends State<TimeSelectorWidget> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
       child: Padding(
-        padding: EdgeInsets.only(
-          top: 6.h,
-          bottom: 6.h,
-          left: 12.w,
-          right: 12.w,
-        ),
+        padding: EdgeInsets.only(left: 12.w, right: 12.w),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -174,9 +180,94 @@ class _TimeSelectorWidgetState extends State<TimeSelectorWidget> {
                     color: mainColor,
                   ),
                 ),
-                const Spacer(),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _selectTime(true),
+                    child: Container(
+                      height: 35.h,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(20.r),
+                          bottomLeft: Radius.circular(20.r),
+                        ),
+                        border: Border(
+                          right: BorderSide(
+                            color: Colors.grey.shade300,
+                            width: 1.w,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 13.sp,
+                            color: Colors.black87,
+                          ),
+                          SizedBox(width: 4.w),
+                          Text(
+                            openText,
+                            style: styles(
+                              fontSize: 14.sp,
+                              fontWeight: _openTime != null
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _selectTime(false),
+                    child: Container(
+                      height: 35.h,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(20.r),
+                          bottomRight: Radius.circular(20.r),
+                        ),
+                        border: Border(
+                          right: BorderSide(
+                            color: Colors.grey.shade300,
+                            width: 1.w,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 13.sp,
+                            color: Colors.red.shade700,
+                          ),
+                          SizedBox(width: 4.w),
+                          Text(
+                            closeText,
+                            style: styles(
+                              fontSize: 14.sp,
+                              fontWeight: _closeTime != null
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                              color: Colors.red.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 Transform.scale(
                   scale: 0.75.r,
+
                   child: Switch(
                     padding: EdgeInsets.all(2.w),
                     value: !isClosed, // true = เปิด (switch on)
@@ -199,66 +290,9 @@ class _TimeSelectorWidgetState extends State<TimeSelectorWidget> {
                 ),
               ],
             ),
-            Padding(
-              padding: EdgeInsets.only(left: 24.w),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _selectTime(true),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 13.sp,
-                            color: Colors.black87,
-                          ),
-                          SizedBox(width: 4.w),
-                          Text(
-                            openText,
-                            style: styles(
-                              fontSize: 14.sp,
-                              fontWeight: _openTime != null
-                                  ? FontWeight.w500
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _selectTime(false),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 13.sp,
-                            color: Colors.red.shade700,
-                          ),
-                          SizedBox(width: 4.w),
-                          Text(
-                            closeText,
-                            style: styles(
-                              fontSize: 14.sp,
-                              fontWeight: _closeTime != null
-                                  ? FontWeight.w500
-                                  : FontWeight.normal,
-                              color: Colors.red.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
             if (_openTime != null || _closeTime != null) ...[
               Padding(
-                padding: EdgeInsets.only(left: 24.w),
+                padding: EdgeInsets.only(left: 24.w, bottom: 4.h),
                 child: Text(
                   _openTime != null && _closeTime != null
                       ? 'เวลา: ${_formatTime(_openTime)} - ${_formatTime(_closeTime)}'

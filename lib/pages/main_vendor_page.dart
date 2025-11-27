@@ -5,13 +5,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:vendor_box/pages/general_upload.dart';
 import 'package:vendor_box/pages/nav_pages/eanings_page.dart';
 import 'package:vendor_box/pages/nav_pages/edit_page.dart';
-import 'package:vendor_box/pages/nav_pages/logout.dart';
 import 'package:vendor_box/pages/nav_pages/orders.dart';
 import 'package:badges/badges.dart' as badges;
-import 'package:vendor_box/pages/nav_pages/upload_page.dart';
 import 'package:vendor_box/pages/nav_pages/store_settings_page.dart'; // ใหม่: Import StoreSettingsPage
 import 'package:vendor_box/services/sevice.dart';
-import 'package:vendor_box/services/store_service.dart';
 
 class MainVendorPage extends StatefulWidget {
   const MainVendorPage({super.key});
@@ -44,7 +41,6 @@ class _MainVendorPageState extends State<MainVendorPage> {
     const EditPage(),
     const OrderPage(),
     const StoreSettingsPage(), // ใหม่
-    const LogOutPage(),
   ];
 
   @override
@@ -130,12 +126,6 @@ class _MainVendorPageState extends State<MainVendorPage> {
                       : IconlyLight.setting, // ใหม่: Settings icon
                 ),
                 label: 'Settings',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(
-                  _pageIndex == 5 ? IconlyBold.logout : IconlyLight.logout,
-                ),
-                label: 'Sign Out',
               ),
             ],
           ),

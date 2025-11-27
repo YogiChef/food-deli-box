@@ -538,7 +538,8 @@ class PreparingItemWidget extends StatelessWidget {
     final proName = item['proName']?.toString() ?? '';
     final quantity = (item['quantity'] as num?)?.toInt() ?? 1;
     final price = (item['price'] as num?)?.toDouble() ?? 0.0;
-    final extraPrice = (item['extraPrice'] as num?)?.toDouble();
+    final extraPrice =
+        ((item['extraPrice'] as num?)?.toDouble() ?? 0.0) * quantity;
     final productSize = item['productSize']?.toString() ?? '';
     final selectedOptions = (item['selectedOptions'] ?? [])
         .map((opt) => Map<String, dynamic>.from(opt ?? {}))
@@ -549,7 +550,7 @@ class PreparingItemWidget extends StatelessWidget {
               '${opt['name']?.toString()} (+฿${(opt['price'] as num?)?.toDouble() ?? 0})',
         )
         .join(', ');
-    final itemSubtotal = (price + (extraPrice ?? 0.0)) * quantity;
+    final itemSubtotal = (price) * quantity;
     final itemId = item['proId']?.toString() ?? 'unknown';
     final productImage = (item['imageUrl'] as List?)?.isNotEmpty == true
         ? item['imageUrl'].first.toString()

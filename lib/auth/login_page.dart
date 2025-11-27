@@ -19,7 +19,8 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage>
+    with SingleTickerProviderStateMixin {
   // ignore: unused_field
   final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
   CollectionReference buyers = firestore.collection('buyers');
@@ -37,7 +38,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         await vendorController.loginUser(email, password);
         await auth.currentUser!.reload();
         _formKey.currentState!.reset();
-        print('Login success – Going to LandingPage');  // Debug
+        print('Login success – Going to LandingPage'); // Debug
         // Navigate ไป LandingPage (แทน Get.to)
         Navigator.pushReplacement(
           context,
@@ -51,7 +52,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
         Fluttertoast.showToast(msg: msg);
       } catch (e) {
         setState(() => _isLoading = false);
-        print('Login error: $e');  // Debug
+        print('Login error: $e'); // Debug
         Fluttertoast.showToast(msg: e.toString());
       }
     }
@@ -163,7 +164,11 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           )
                         : BottonWidget(
                             label: 'Login',
-                            style: styles(fontSize: 16, color: Colors.white),
+                            style: styles(
+                              fontSize: 16,
+                              color: Colors.white,
+                              letterSpacing: null,
+                            ),
                             icon: Icons.login,
                             press: login,
                           ),

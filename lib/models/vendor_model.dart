@@ -17,7 +17,8 @@ class VendorModel {
   final String bankAccount;
   final String promptPayId;
   final Map<String, dynamic>?
-  storeHours; // ใหม่: { 'monday': {'open': '09:00', 'close': '18:00'} }
+  storeHours; // { 'monday': {'open': '09:00', 'close': '18:00', 'closed': false} }
+  final bool temporarilyClosed; // ใหม่: สถานะปิดชั่วคราว (default false = เปิด)
 
   VendorModel({
     this.approved,
@@ -37,7 +38,8 @@ class VendorModel {
     required this.bankName,
     required this.bankAccount,
     required this.promptPayId,
-    this.storeHours, // ใหม่
+    this.storeHours,
+    this.temporarilyClosed = false, // ใหม่: default false
   });
 
   factory VendorModel.fromJson(Map<String, Object?> json) {
@@ -68,7 +70,8 @@ class VendorModel {
       bankName: json['bankName'] as String? ?? '',
       bankAccount: json['bankAccount'] as String? ?? '',
       promptPayId: json['promptPayId'] as String? ?? '',
-      storeHours: json['storeHours'] as Map<String, dynamic>?, // ใหม่
+      storeHours: json['storeHours'] as Map<String, dynamic>?,
+      temporarilyClosed: json['temporarilyClosed'] as bool? ?? false, // ใหม่
     );
   }
 
@@ -91,7 +94,8 @@ class VendorModel {
       'bankName': bankName,
       'bankAccount': bankAccount,
       'promptPayId': promptPayId,
-      'storeHours': storeHours, // ใหม่
+      'storeHours': storeHours,
+      'temporarilyClosed': temporarilyClosed, // ใหม่
     };
   }
 }
