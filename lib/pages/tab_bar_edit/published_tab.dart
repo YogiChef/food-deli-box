@@ -83,7 +83,7 @@ class PublishedTab extends StatelessWidget {
                                   ),
                                   Positioned.fill(
                                     child: Container(
-                                      color: Colors.black87.withOpacity(0.6),
+                                      color: Colors.black87.withAlpha(60),
                                       child: Center(
                                         child: Text(
                                           'Out of Stock',

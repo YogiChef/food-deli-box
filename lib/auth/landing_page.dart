@@ -249,7 +249,7 @@ class _LandingPageState extends State<LandingPage> {
   // ใหม่: เริ่ม Timer เช็คทุก 30 วินาที ถ้าถึงเวลาเปิด → setState() เพื่อ rebuild และเข้า Main
   void _startAutoCheckTimer(VendorModel vendorsModel) {
     _timer?.cancel(); // Cancel timer เก่า
-    _timer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       print('Auto-check timer tick: Checking if open now...');
       final isOpenNow = _checkIsOpenNow(vendorsModel);
       if (isOpenNow) {
@@ -285,33 +285,46 @@ class _LandingPageState extends State<LandingPage> {
               builder: (context, countdownText, child) {
                 if (countdownText.isEmpty)
                   return const SizedBox.shrink(); // Fallback ถ้าไม่มี text
-                return ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const StoreSettingsPage(),
+                return Column(
+                  children: [
+                    Text(
+                      'จะเปิดให้บริการในอีก',
+                      style: styles(
+                        fontSize: 16.sp,
+                        color: Colors.deepOrange,
+                        fontWeight: FontWeight.w700,
                       ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 74.w,
-                      vertical: 20.h,
                     ),
-                    backgroundColor: mainColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                    SizedBox(height: 20.h),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const StoreSettingsPage(),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 54.w,
+                          vertical: 20.h,
+                        ),
+                        backgroundColor: mainColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        countdownText,
+                        style: styles(
+                          fontSize: 14.sp,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    countdownText,
-                    style: styles(
-                      fontSize: 14.sp,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+                  ],
                 );
               },
             ),

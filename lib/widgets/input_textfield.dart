@@ -10,13 +10,14 @@ class InputTextfield extends StatelessWidget {
     this.suffixIcon,
     required this.hintText,
     this.validator,
-    required this.onChanged,
+    this.onChanged,
     this.maxLength,
     this.obscureText = false,
     this.controller,
     this.label,
     this.initialValue,
     this.enabled = true,
+    this.maxLines,
   });
 
   final TextInputType textInputType;
@@ -24,8 +25,9 @@ class InputTextfield extends StatelessWidget {
   final String hintText;
   final Widget? suffixIcon;
   final String? Function(String?)? validator;
-  final Function(String) onChanged;
+  final Function(String)? onChanged;
   final int? maxLength;
+  final int? maxLines;
   final bool obscureText;
   final TextEditingController? controller;
   final Widget? label;
@@ -35,7 +37,7 @@ class InputTextfield extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
+      padding: EdgeInsets.symmetric(vertical: 10.h),
       child: TextFormField(
         initialValue: initialValue,
         onChanged: onChanged,
@@ -43,6 +45,7 @@ class InputTextfield extends StatelessWidget {
         obscureText: obscureText,
         keyboardType: textInputType,
         maxLength: maxLength,
+        maxLines: maxLines,
         controller: controller,
         style: styles(fontSize: 12.sp),
         decoration: InputDecoration(

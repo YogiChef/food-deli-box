@@ -8,6 +8,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:vendor_box/controllers/vendor_controller.dart';
 import 'package:vendor_box/models/vendor_model.dart';
 import 'package:vendor_box/pages/nav_pages/logout.dart';
+import 'package:vendor_box/pages/main_vendor_page.dart';
 import 'package:vendor_box/services/sevice.dart';
 import 'package:vendor_box/widgets/button_widget.dart';
 import 'package:vendor_box/widgets/time_selector_widget.dart';
@@ -258,13 +259,24 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
           );
         }
 
-        // ใหม่: ถ้าเปิดได้ทันที → pop กลับ Landing (Stream จะเข้า Main อัตโนมัติ)
+        // แก้: Navigation หลัง save – ใช้ pushAndRemoveUntil เพื่อ clear stack และ avoid loop/white screen
         if (isOpenNow && mounted) {
-          // ใหม่: เช็ค mounted ก่อน pop
-          print('Saved and open now – Auto-activating by popping to Landing');
-          Navigator.of(
-            context,
-          ).pop(); // กลับ Landing → Timer และ Stream จะ handle
+          print('Saved and open now – Navigating to MainVendorPage');
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const MainVendorPage()),
+            (route) =>
+                false, // Clear all previous routes (no loop back to Landing)
+          );
+        } else if (mounted) {
+          print('Saved but closed now – Popping to root (Landing)');
+          Navigator.of(context).popUntil(
+            (route) => route.isFirst,
+          ); // Pop จนถึง root (Landing) เพื่อแสดง UI ปิด
+        }
+      } else {
+        print('StoreSettings: No vendor doc after save');
+        if (mounted) {
+          Navigator.of(context).pop(); // Fallback pop
         }
       }
     } catch (e) {

@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print, use_build_context_synchronously
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
@@ -538,6 +540,7 @@ class PreparingItemWidget extends StatelessWidget {
     final proName = item['proName']?.toString() ?? '';
     final quantity = (item['quantity'] as num?)?.toInt() ?? 1;
     final price = (item['price'] as num?)?.toDouble() ?? 0.0;
+    final optionPrice = (item['extraPrice'] as num?)?.toDouble();
     final extraPrice =
         ((item['extraPrice'] as num?)?.toDouble() ?? 0.0) * quantity;
     final productSize = item['productSize']?.toString() ?? '';
@@ -590,6 +593,7 @@ class PreparingItemWidget extends StatelessWidget {
                       price,
                       quantity,
                       itemSubtotal,
+                      optionPrice,
                       extraPrice,
                       itemCancelRequested,
                     ),
@@ -644,6 +648,7 @@ class PreparingItemWidget extends StatelessWidget {
 
   Widget _buildImage(String productImage, bool itemCancelRequested) {
     return Stack(
+      alignment: Alignment.center,
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(8.r),
@@ -662,21 +667,15 @@ class PreparingItemWidget extends StatelessWidget {
           ),
         ),
         if (itemCancelRequested) ...[
-          Positioned(
-            top: 0,
-            right: 0,
-            child: Container(
-              padding: EdgeInsets.all(4.w),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.circular(50.r),
-              ),
-              child: Icon(
-                Icons.hourglass_top,
-                color: Colors.white,
-                size: 16.sp,
-              ),
+          Container(
+            height: 40.w,
+            width: 40.w,
+            padding: EdgeInsets.all(4.w),
+            decoration: BoxDecoration(
+              color: Colors.white38,
+              borderRadius: BorderRadius.circular(50.r),
             ),
+            child: Icon(Icons.hourglass_top, color: Colors.red, size: 24.sp),
           ),
         ],
       ],
@@ -690,6 +689,7 @@ class PreparingItemWidget extends StatelessWidget {
     double price,
     int quantity,
     double itemSubtotal,
+    double? optionPrice,
     double? extraPrice,
     bool itemCancelRequested,
   ) {
@@ -737,9 +737,18 @@ class PreparingItemWidget extends StatelessWidget {
           ],
         ),
         if (extraPrice != null && extraPrice > 0) ...[
-          Text(
-            'Extra: +฿${extraPrice.toStringAsFixed(2)}',
-            style: styles(fontSize: 12.sp, color: Colors.orange),
+          Row(
+            children: [
+              Text(
+                'Extra: ฿$optionPrice x $quantity',
+                style: styles(fontSize: 12.sp, color: Colors.orange),
+              ),
+              Spacer(),
+              Text(
+                '= ฿${extraPrice.toStringAsFixed(2)}',
+                style: styles(fontSize: 12.sp, color: Colors.orange),
+              ),
+            ],
           ),
         ],
         if (itemCancelRequested) ...[
@@ -750,7 +759,7 @@ class PreparingItemWidget extends StatelessWidget {
                 Icon(Icons.hourglass_top, size: 20.sp, color: Colors.red),
                 SizedBox(width: 4.w),
                 Text(
-                  'ขอให้ยกเลิกรายการนี้',
+                  'ขอยกเลิกรายการนี้',
                   style: styles(fontSize: 12.sp, color: Colors.red),
                 ),
               ],
@@ -1245,7 +1254,7 @@ class BuyerDetailsWidget extends StatelessWidget {
                                     SizedBox(width: 4.w),
                                     Expanded(
                                       child: Text(
-                                        'Tel: $orderPhone',
+                                        orderPhone,
                                         style: styles(
                                           fontSize: 12.sp,
                                           color: Colors.black54,

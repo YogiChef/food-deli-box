@@ -8,7 +8,7 @@ import 'package:uuid/uuid.dart';
 import 'package:vendor_box/pages/main_vendor_page.dart';
 import 'package:vendor_box/services/sevice.dart';
 
-// Enum สำหรับประเภทกลุ่มตัวเลือก
+// Enum สำหรับประเภทกลุ่มตัวเลือก (ย้ายมาที่ provider เพื่อ shared)
 enum OptionGroupType {
   free, // ไม่เพิ่มราคา (multi-select)
   singleSelect, // เลือกได้อย่างใดอย่างหนึ่ง (radio, e.g., ขนาดต่าง ๆ)
@@ -123,6 +123,20 @@ class ProductProvider with ChangeNotifier {
     getFormData(notes: notes);
   }
 
+  // ใหม่: Load optionGroups จาก Firestore (for edit mode)
+  void loadOptionGroups(List<dynamic> groups) {
+    optionGroups = groups.map((dynamic g) {
+      final groupMap = Map<String, dynamic>.from(g as Map);
+      groupMap['options'] = (groupMap['options'] as List<dynamic>? ?? [])
+          .map((opt) => Map<String, dynamic>.from(opt as Map))
+          .toList();
+      return groupMap;
+    }).toList();
+    getFormData(optionGroupsData: optionGroups); // Sync to productData
+    notifyListeners();
+    print('Loaded ${optionGroups.length} option groups');
+  }
+
   clearData() {
     productData.clear(); // Clear map
     optionGroups.clear();
@@ -163,6 +177,10 @@ class ProductProvider with ChangeNotifier {
         ),
         notes: data['notes']?.toString() ?? '',
       );
+
+      // ใหม่: Load optionGroups ผ่าน method ใหม่
+      final optionGroupsData = data['optionGroups'] as List<dynamic>? ?? [];
+      loadOptionGroups(optionGroupsData);
 
       print(
         '=== DEBUG LOAD SUCCESS === Loaded proName: ${productData['productName']}, qty: ${productData['qty']}',
@@ -236,9 +254,7 @@ class ProductProvider with ChangeNotifier {
         'date': productData['date'] ?? DateTime.now(),
         'chargeShipping': productData['chargeShipping'] ?? false,
         'shippingCharge': productData['shippingCharge'] ?? 0.0,
-        // 'brandName':
-        //     productData['brandName'] ??
-        //     vendorData['bussinessName'], // Fallback จาก vendor
+        // 'brandName': productData['brandName'] ?? vendorData['bussinessName'], // Fallback จาก vendor
         'size': productData['sizeList'] ?? [], // Deprecated
         'optionGroups':
             productData['optionGroups'] ?? [], // บันทึกกลุ่มตัวเลือก (รวม size)
