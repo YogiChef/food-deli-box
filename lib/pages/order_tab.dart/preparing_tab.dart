@@ -618,10 +618,18 @@ class PreparingItemWidget extends StatelessWidget {
           flex: 2,
           onPressed: (context) =>
               _handleApproveCancel(orderId, rawIndex, proName),
-          backgroundColor: Colors.green,
+          backgroundColor: Colors.red,
           foregroundColor: Colors.white,
           icon: Icons.check,
-          label: 'Approve Cancel',
+          label: 'Cancel',
+        ),
+        SlidableAction(
+          flex: 2,
+          onPressed: (context) => _handleAccept(orderId, rawIndex, proName),
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
+          icon: Icons.check,
+          label: 'Accept',
         ),
       ];
     } else {
