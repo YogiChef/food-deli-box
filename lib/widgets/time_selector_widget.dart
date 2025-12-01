@@ -290,23 +290,23 @@ class _TimeSelectorWidgetState extends State<TimeSelectorWidget> {
                 ),
               ],
             ),
-            if (_openTime != null || _closeTime != null) ...[
-              Padding(
-                padding: EdgeInsets.only(left: 24.w, bottom: 4.h),
-                child: Text(
-                  _openTime != null && _closeTime != null
-                      ? 'เวลา: ${_formatTime(_openTime)} - ${_formatTime(_closeTime)}'
-                      : _openTime != null
-                      ? 'เปิด: ${_formatTime(_openTime)}'
-                      : 'ปิด: ${_formatTime(_closeTime)}',
-                  style: styles(
-                    fontSize: 12.sp,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-            ],
+            // if (_openTime != null || _closeTime != null) ...[
+            //   Padding(
+            //     padding: EdgeInsets.only(left: 24.w, bottom: 4.h),
+            //     child: Text(
+            //       _openTime != null && _closeTime != null
+            //           ? 'เวลา: ${_formatTime(_openTime)} - ${_formatTime(_closeTime)}'
+            //           : _openTime != null
+            //           ? 'เปิด: ${_formatTime(_openTime)}'
+            //           : 'ปิด: ${_formatTime(_closeTime)}',
+            //       style: styles(
+            //         fontSize: 12.sp,
+            //         color: Colors.grey.shade600,
+            //         fontWeight: FontWeight.w400,
+            //       ),
+            //     ),
+            //   ),
+            // ],
           ],
         ),
       ),

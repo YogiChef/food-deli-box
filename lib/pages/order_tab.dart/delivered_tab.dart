@@ -15,11 +15,11 @@ class _DeliveredState extends State<Delivered> {
   @override
   Widget build(BuildContext context) {
     final double width = MediaQuery.of(context).size.width;
-    // FIXED: Query orders with status 'pending' OR 'delivered' to catch partial accepted items
+    // FIXED: Query orders with status 'pending', 'delivered', or 'cancelled' to catch partial accepted items and legacy data
     final Stream<QuerySnapshot> ordersStream = FirebaseFirestore.instance
         .collection('orders')
         .where('vendorId', isEqualTo: auth.currentUser!.uid)
-        .where('status', whereIn: ['pending', 'delivered'])
+        .where('status', whereIn: ['pending', 'delivered', 'cancelled'])
         .orderBy('timestamp', descending: true)
         .limit(50)
         .snapshots();
@@ -59,7 +59,7 @@ class _DeliveredState extends State<Delivered> {
         }
 
         print(
-          '=== DEBUG DELIVERED LOADED === ${snapshot.data!.docs.length} orders (pending/delivered)',
+          '=== DEBUG DELIVERED LOADED === ${snapshot.data!.docs.length} orders (pending/delivered/cancelled)',
         ); // Debug
 
         return ListView(
@@ -111,6 +111,7 @@ class _DeliveredState extends State<Delivered> {
                 // FIXED: Filter & sum accepted items for display & totals (from pending or delivered orders)
                 final List itemsRaw = orderData['items'] ?? [];
                 final List<Map<String, dynamic>> acceptedItems = [];
+                final List<Map<String, dynamic>> cancelledItems = [];
                 double deliveredSubTotal = 0.0;
                 bool isFullyDelivered = (orderStatus == 'delivered');
                 for (var rawItem in itemsRaw) {
@@ -118,6 +119,7 @@ class _DeliveredState extends State<Delivered> {
                     rawItem ?? {},
                   );
                   final bool isAccepted = item['accepted'] ?? false;
+                  final bool isCancelled = item['cancelled'] ?? false;
                   if (isAccepted) {
                     acceptedItems.add(item);
                     final double price =
@@ -128,6 +130,8 @@ class _DeliveredState extends State<Delivered> {
                         (item['quantity'] as num?)?.toInt() ?? 1;
                     deliveredSubTotal +=
                         (price + (extraPrice ?? 0.0)) * quantity;
+                  } else if (isCancelled) {
+                    cancelledItems.add(item);
                   }
                 }
                 final double deliveredTotal = serviceType == 'delivery'
@@ -165,6 +169,7 @@ class _DeliveredState extends State<Delivered> {
                           // ),
                         ),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -223,14 +228,27 @@ class _DeliveredState extends State<Delivered> {
                                     color: Colors.grey,
                                   ),
                                 ),
-                                Text(
-                                  '${acceptedItems.length}/${itemsRaw.length} รายการ',
-                                  style: styles(
-                                    fontSize: 12.sp,
-                                    color: isFullyDelivered
-                                        ? Colors.green
-                                        : Colors.deepOrange,
-                                  ),
+
+                                Row(
+                                  children: [
+                                    Text(
+                                      '${acceptedItems.length} สำเร็จ',
+                                      style: styles(
+                                        fontSize: 12.sp,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12.w),
+                                    cancelledItems.isNotEmpty
+                                        ? Text(
+                                            '(ยกเลิก ${cancelledItems.length})',
+                                            style: styles(
+                                              fontSize: 12.sp,
+                                              color: Colors.deepOrange,
+                                            ),
+                                          )
+                                        : SizedBox.shrink(),
+                                  ],
                                 ),
                               ],
                             ),
@@ -310,7 +328,7 @@ class _DeliveredState extends State<Delivered> {
                                       0.0;
                                   final double? optionPrice =
                                       (item['extraPrice'] as num?)?.toDouble();
-                                  final double? extraPrice =
+                                  final double extraPrice =
                                       ((item['extraPrice'] as num?)
                                               ?.toDouble() ??
                                           00) *
@@ -352,8 +370,8 @@ class _DeliveredState extends State<Delivered> {
                                           children: [
                                             // Item Image
                                             SizedBox(
-                                              height: 60.h,
-                                              width: 60.w,
+                                              height: 40.h,
+                                              width: 50.w,
                                               child: ClipRRect(
                                                 borderRadius:
                                                     BorderRadius.circular(8.r),
@@ -441,8 +459,7 @@ class _DeliveredState extends State<Delivered> {
                                                       ),
                                                     ],
                                                   ),
-                                                  if (extraPrice != null &&
-                                                      extraPrice > 0) ...[
+                                                  if (extraPrice > 0) ...[
                                                     Row(
                                                       children: [
                                                         Text(
@@ -474,6 +491,250 @@ class _DeliveredState extends State<Delivered> {
                                     ),
                                   );
                                 }).toList(),
+                                // NEW: Cancelled Items Section
+                                if (cancelledItems.isNotEmpty) ...[
+                                  SizedBox(height: 16.h),
+                                  Text(
+                                    'รายการที่ถูกยกเลิก',
+                                    style: styles(
+                                      fontSize: 14.sp,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8.h),
+                                  ...cancelledItems.map<Widget>((item) {
+                                    final String proName =
+                                        item['proName']?.toString() ?? '';
+                                    final String productSize =
+                                        item['productSize']?.toString() ?? '';
+                                    final int quantity =
+                                        (item['quantity'] as num?)?.toInt() ??
+                                        1;
+                                    final double price =
+                                        (item['price'] as num?)?.toDouble() ??
+                                        0.0;
+                                    final double? optionPrice =
+                                        (item['extraPrice'] as num?)
+                                            ?.toDouble();
+                                    final double extraPrice =
+                                        ((item['extraPrice'] as num?)
+                                                ?.toDouble() ??
+                                            00) *
+                                        quantity;
+                                    final List? imagesRaw =
+                                        item['imageUrl'] as List?;
+                                    final String productImage =
+                                        (imagesRaw != null &&
+                                            imagesRaw.isNotEmpty)
+                                        ? imagesRaw.first.toString()
+                                        : '';
+                                    final double itemSubtotal =
+                                        price * quantity;
+                                    final List selectedOptionsRaw =
+                                        item['selectedOptions'] ?? [];
+                                    final String
+                                    optionsText = selectedOptionsRaw
+                                        .map(
+                                          (opt) =>
+                                              '${(opt['name'] ?? '')} (+฿${(opt['price'] as num?)?.toDouble() ?? 0})',
+                                        )
+                                        .join(', ');
+
+                                    final TextStyle cancelledStyle = styles(
+                                      fontSize: 14.sp,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.red,
+                                      decoration: TextDecoration.lineThrough,
+                                    );
+                                    final TextStyle cancelledSmallStyle =
+                                        styles(
+                                          fontSize: 12.sp,
+                                          color: Colors.black45,
+                                          decoration:
+                                              TextDecoration.lineThrough,
+                                        );
+                                    final TextStyle cancelledPriceStyle =
+                                        styles(
+                                          fontSize: 13.sp,
+                                          color: Colors.red.shade600,
+                                          fontWeight: FontWeight.w600,
+                                          decoration:
+                                              TextDecoration.lineThrough,
+                                        );
+                                    final TextStyle extraCancelStyles = styles(
+                                      fontSize: 12.sp,
+                                      color: Colors.orange,
+                                      fontWeight: FontWeight.w600,
+                                      decoration: TextDecoration.lineThrough,
+                                    );
+
+                                    return Container(
+                                      padding: EdgeInsets.all(12.w),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade50,
+                                        border: Border.all(
+                                          color: Colors.red.shade600,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              // Item Image
+                                              SizedBox(
+                                                height: 40.h,
+                                                width: 50.w,
+                                                child: Stack(
+                                                  alignment: Alignment.center,
+                                                  children: [
+                                                    ClipRRect(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8.r,
+                                                          ),
+                                                      child:
+                                                          productImage
+                                                              .isNotEmpty
+                                                          ? Image.network(
+                                                              productImage,
+                                                              fit: BoxFit.cover,
+                                                              errorBuilder:
+                                                                  (
+                                                                    context,
+                                                                    error,
+                                                                    stackTrace,
+                                                                  ) => Icon(
+                                                                    Icons
+                                                                        .image_not_supported,
+                                                                    size: 60.w,
+                                                                  ),
+                                                            )
+                                                          : Icon(
+                                                              Icons
+                                                                  .image_not_supported,
+                                                              size: 60.w,
+                                                            ),
+                                                    ),
+                                                    Positioned.fill(
+                                                      child: Container(
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.black
+                                                              .withAlpha(30),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                8.r,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Positioned.fill(
+                                                      child: Icon(
+                                                        Icons.cancel_outlined,
+                                                        color: Colors.red,
+                                                        size: 34.r,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              SizedBox(width: 12.w),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      proName,
+                                                      style: cancelledStyle,
+                                                    ),
+                                                    if (productSize
+                                                        .isNotEmpty) ...[
+                                                      SizedBox(height: 2.h),
+                                                      Text(
+                                                        'Size: $productSize',
+                                                        style:
+                                                            cancelledSmallStyle,
+                                                      ),
+                                                    ],
+                                                    if (optionsText
+                                                        .isNotEmpty) ...[
+                                                      SizedBox(height: 2.h),
+                                                      Text(
+                                                        optionsText,
+                                                        style:
+                                                            cancelledSmallStyle,
+                                                      ),
+                                                    ],
+                                                    SizedBox(height: 4.h),
+                                                    Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceBetween,
+                                                      children: [
+                                                        Text(
+                                                          '฿${price.toStringAsFixed(2)} x $quantity',
+                                                          style:
+                                                              cancelledSmallStyle,
+                                                        ),
+                                                        Text(
+                                                          '= ฿${itemSubtotal.toStringAsFixed(2)}',
+                                                          style:
+                                                              cancelledPriceStyle,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    if (extraPrice > 0) ...[
+                                                      Row(
+                                                        children: [
+                                                          Text(
+                                                            'Extra: ฿$optionPrice x $quantity',
+                                                            style:
+                                                                extraCancelStyles,
+                                                          ),
+                                                          Spacer(),
+                                                          Text(
+                                                            '= ฿${extraPrice.toStringAsFixed(2)}',
+                                                            style:
+                                                                extraCancelStyles,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                    SizedBox(height: 4.h),
+                                                    Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.warning,
+                                                          size: 16.sp,
+                                                          color: Colors.red,
+                                                        ),
+                                                        SizedBox(width: 4.w),
+                                                        Text(
+                                                          'รายการนี้ถูกยกเลิก',
+                                                          style: styles(
+                                                            fontSize: 12.sp,
+                                                            color: Colors.red,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ],
                                 // Footer: Summary (accumulative for accepted items)
                                 Container(
                                   width: double.infinity,
@@ -616,21 +877,41 @@ class _DeliveredState extends State<Delivered> {
                                             ),
                                           ),
                                           if (phone.isNotEmpty) ...[
-                                            Text(
-                                              phone,
-                                              style: styles(
-                                                fontSize: 12.sp,
-                                                color: Colors.black54,
-                                              ),
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.phone,
+                                                  size: 16.sp,
+                                                  color: Colors.green,
+                                                ),
+                                                SizedBox(width: 4.w),
+                                                Text(
+                                                  phone,
+                                                  style: styles(
+                                                    fontSize: 12.sp,
+                                                    color: Colors.black54,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                           if (email.isNotEmpty) ...[
-                                            Text(
-                                              email,
-                                              style: styles(
-                                                fontSize: 12.sp,
-                                                color: Colors.black54,
-                                              ),
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.email,
+                                                  size: 16.sp,
+                                                  color: Colors.blue,
+                                                ),
+                                                SizedBox(width: 4.w),
+                                                Text(
+                                                  email,
+                                                  style: styles(
+                                                    fontSize: 12.sp,
+                                                    color: Colors.black54,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
                                           ],
                                           // Fallback สำหรับ fields เก่า

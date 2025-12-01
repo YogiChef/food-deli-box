@@ -48,7 +48,7 @@ dependencies:
   flutter_iconly: ^1.0.2
   provider: ^6.1.1
   uuid: ^4.3.3
-  flutter_slidable: ^3.0.1
+  flutter_slidable: ^4.0.3
   intl: 
   badges: ^3.1.2
   get: ^4.6.6  

@@ -37,6 +37,7 @@ styles({
     fontSize: fontSize,
     fontWeight: fontWeight,
     color: color,
+    decoration: decoration,
   );
 }
 

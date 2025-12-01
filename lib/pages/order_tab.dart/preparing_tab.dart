@@ -8,7 +8,8 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:vendor_box/services/sevice.dart';
-import 'package:vendor_box/pages/chat_detail.dart';
+import 'package:vendor_box/pages/order_tab.dart/buyer_details_widget.dart';
+import 'package:vendor_box/widgets/preparing_item_widget.dart';
 
 class Preparing extends StatefulWidget {
   const Preparing({super.key});
@@ -207,6 +208,7 @@ class _PreparingState extends State<Preparing> {
           },
           title: _buildTitle(
             serviceDetails,
+            orderCancelRequested,
             pendingCount,
             totalPrice,
             timestamp,
@@ -378,21 +380,43 @@ class _PreparingState extends State<Preparing> {
     String orderId,
     bool orderCancelRequested,
     List itemsRaw,
-  ) => [
-    SlidableAction(
-      flex: 3,
-      onPressed: (context) => orderCancelRequested
-          ? _approveOrderCancel(orderId, itemsRaw)
-          : _vendorCancelOrder(orderId, itemsRaw),
-      backgroundColor: const Color(0xFFFE4A49),
-      foregroundColor: Colors.grey.shade100,
-      icon: Icons.cancel,
-      label: orderCancelRequested ? 'Approve Order Cancel' : 'Cancel Order',
-    ),
-  ];
+  ) {
+    if (orderCancelRequested) {
+      return [
+        SlidableAction(
+          flex: 3,
+          onPressed: (context) => _approveOrderCancel(orderId, itemsRaw),
+          backgroundColor: Colors.red,
+          foregroundColor: Colors.white,
+          icon: Icons.check,
+          label: 'เห็นด้วยกับคำขอยกเลิก',
+        ),
+        SlidableAction(
+          flex: 3,
+          onPressed: (context) => _rejectOrderCancel(orderId, itemsRaw),
+          backgroundColor: Colors.green,
+          foregroundColor: Colors.white,
+          icon: Icons.close,
+          label: 'ไม่ยินยอม',
+        ),
+      ];
+    } else {
+      return [
+        SlidableAction(
+          flex: 3,
+          onPressed: (context) => _vendorCancelOrder(orderId, itemsRaw),
+          backgroundColor: const Color(0xFFFE4A49),
+          foregroundColor: Colors.white,
+          icon: Icons.cancel,
+          label: 'ยกเลิกคำสั่งซื้อ',
+        ),
+      ];
+    }
+  }
 
   Widget _buildTitle(
     ({IconData icon, Color color, String label}) serviceDetails,
+    bool orderCancelRequested,
     int pendingCount,
     double totalPrice,
     Timestamp timestamp,
@@ -409,24 +433,43 @@ class _PreparingState extends State<Preparing> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      serviceDetails.icon,
-                      size: 34.w,
-                      color: serviceDetails.color,
-                    ),
-                    SizedBox(width: 4.w),
-                    Text(
-                      serviceDetails.label,
-                      style: styles(
-                        fontSize: 12.sp,
-                        color: serviceDetails.color,
-                        fontWeight: FontWeight.w600,
+                orderCancelRequested
+                    ? Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12.w,
+                          vertical: 2.h,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20.r),
+                          color: Colors.red.shade400,
+                        ),
+                        child: Text(
+                          'ขอยกเลิกคำสั่งซื้อทั้งหมด',
+                          style: styles(
+                            fontSize: 13.sp,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      )
+                    : Row(
+                        children: [
+                          Icon(
+                            serviceDetails.icon,
+                            size: 20.w,
+                            color: serviceDetails.color,
+                          ),
+                          SizedBox(width: 4.w),
+                          Text(
+                            serviceDetails.label,
+                            style: styles(
+                              fontSize: 12.sp,
+                              color: serviceDetails.color,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
                 Text(
                   '$pendingCount รายการ',
                   style: styles(fontSize: 12.sp, color: Colors.black54),
@@ -455,16 +498,34 @@ class _PreparingState extends State<Preparing> {
   );
 
   Future<void> _approveOrderCancel(String orderId, List itemsRaw) async {
-    EasyLoading.show(status: 'Approving order cancel...');
+    EasyLoading.show(status: 'กำลังอนุมัติการยกเลิก...');
     try {
       await _updateOrderCancel(orderId, itemsRaw, isApprove: true);
       Fluttertoast.showToast(
-        msg: 'Order cancel approved',
+        msg: 'อนุมัติการยกเลิกคำสั่งซื้อแล้ว',
         backgroundColor: Colors.orange,
       );
     } catch (e) {
       Fluttertoast.showToast(
-        msg: 'Approve order cancel failed: $e',
+        msg: 'อนุมัติการยกเลิกล้มเหลว: $e',
+        backgroundColor: Colors.red,
+      );
+    } finally {
+      EasyLoading.dismiss();
+    }
+  }
+
+  Future<void> _rejectOrderCancel(String orderId, List itemsRaw) async {
+    EasyLoading.show(status: 'กำลังปฏิเสธคำขอยกเลิก...');
+    try {
+      await _processRejectCancel(orderId, itemsRaw);
+      Fluttertoast.showToast(
+        msg: 'ปฏิเสธคำขอยกเลิกและยืนยันคำสั่งซื้อแล้ว',
+        backgroundColor: Colors.green,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: 'ปฏิเสธคำขอยกเลิกล้มเหลว: $e',
         backgroundColor: Colors.red,
       );
     } finally {
@@ -473,16 +534,16 @@ class _PreparingState extends State<Preparing> {
   }
 
   Future<void> _vendorCancelOrder(String orderId, List itemsRaw) async {
-    EasyLoading.show(status: 'Cancelling order...');
+    EasyLoading.show(status: 'กำลังยกเลิกคำสั่งซื้อ...');
     try {
       await _updateOrderCancel(orderId, itemsRaw, isApprove: false);
       Fluttertoast.showToast(
-        msg: 'Order cancelled by vendor',
+        msg: 'ยกเลิกคำสั่งซื้อโดยผู้ขายแล้ว',
         backgroundColor: Colors.orange,
       );
     } catch (e) {
       Fluttertoast.showToast(
-        msg: 'Order cancel failed: $e',
+        msg: 'ยกเลิกคำสั่งซื้อล้มเหลว: $e',
         backgroundColor: Colors.red,
       );
     } finally {
@@ -515,430 +576,8 @@ class _PreparingState extends State<Preparing> {
       }
     });
   }
-}
 
-class PreparingItemWidget extends StatelessWidget {
-  final Map<String, dynamic> item;
-  final String orderId;
-  final List itemsRaw;
-  final int uiIndex;
-  final double width;
-
-  const PreparingItemWidget({
-    super.key,
-    required this.item,
-    required this.orderId,
-    required this.itemsRaw,
-    required this.uiIndex,
-    required this.width,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final rawIndex = item['__rawIndex'] as int;
-    final itemCancelRequested = item['cancelRequested'] ?? false;
-    final proName = item['proName']?.toString() ?? '';
-    final quantity = (item['quantity'] as num?)?.toInt() ?? 1;
-    final price = (item['price'] as num?)?.toDouble() ?? 0.0;
-    final optionPrice = (item['extraPrice'] as num?)?.toDouble();
-    final extraPrice =
-        ((item['extraPrice'] as num?)?.toDouble() ?? 0.0) * quantity;
-    final productSize = item['productSize']?.toString() ?? '';
-    final selectedOptions = (item['selectedOptions'] ?? [])
-        .map((opt) => Map<String, dynamic>.from(opt ?? {}))
-        .toList();
-    final optionsText = selectedOptions
-        .map(
-          (opt) =>
-              '${opt['name']?.toString()} (+฿${(opt['price'] as num?)?.toDouble() ?? 0})',
-        )
-        .join(', ');
-    final itemSubtotal = (price) * quantity;
-    final itemId = item['proId']?.toString() ?? 'unknown';
-    final productImage = (item['imageUrl'] as List?)?.isNotEmpty == true
-        ? item['imageUrl'].first.toString()
-        : '';
-
-    print(
-      '=== DEBUG ITEM BUILD === Order $orderId, UI Index: $uiIndex, Raw Index: $rawIndex, Item: $proName',
-    );
-
-    final actions = _buildActions(rawIndex, itemCancelRequested, proName);
-
-    return Container(
-      key: ValueKey('$orderId-$itemId-$rawIndex'),
-      margin: EdgeInsets.only(bottom: 8.h),
-      child: Slidable(
-        closeOnScroll: true,
-        direction: Axis.horizontal,
-        startActionPane: ActionPane(
-          motion: const ScrollMotion(),
-          children: actions,
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(16.w),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildImage(productImage, itemCancelRequested),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildItemDetails(
-                      proName,
-                      productSize,
-                      optionsText,
-                      price,
-                      quantity,
-                      itemSubtotal,
-                      optionPrice,
-                      extraPrice,
-                      itemCancelRequested,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _buildActions(
-    int rawIndex,
-    bool itemCancelRequested,
-    String proName,
-  ) {
-    if (itemCancelRequested) {
-      return [
-        SlidableAction(
-          flex: 2,
-          onPressed: (context) =>
-              _handleApproveCancel(orderId, rawIndex, proName),
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.white,
-          icon: Icons.check,
-          label: 'Cancel',
-        ),
-        SlidableAction(
-          flex: 2,
-          onPressed: (context) => _handleAccept(orderId, rawIndex, proName),
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-          icon: Icons.check,
-          label: 'Accept',
-        ),
-      ];
-    } else {
-      return [
-        SlidableAction(
-          flex: 2,
-          onPressed: (context) => _handleAccept(orderId, rawIndex, proName),
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-          icon: Icons.check,
-          label: 'Accept',
-        ),
-        SlidableAction(
-          flex: 2,
-          onPressed: (context) => _handleCancel(orderId, rawIndex, proName),
-          backgroundColor: const Color(0xFFFE4A49),
-          foregroundColor: Colors.white,
-          icon: Icons.close,
-          label: 'Cancel',
-        ),
-      ];
-    }
-  }
-
-  Widget _buildImage(String productImage, bool itemCancelRequested) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8.r),
-          child: Container(
-            width: 60.w,
-            height: 60.h,
-            color: Colors.grey.shade200,
-            child: productImage.isNotEmpty
-                ? Image.network(
-                    productImage,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        Icon(Icons.image_not_supported, color: Colors.grey),
-                  )
-                : Icon(Icons.image, color: Colors.grey),
-          ),
-        ),
-        if (itemCancelRequested) ...[
-          Container(
-            height: 40.w,
-            width: 40.w,
-            padding: EdgeInsets.all(4.w),
-            decoration: BoxDecoration(
-              color: Colors.white38,
-              borderRadius: BorderRadius.circular(50.r),
-            ),
-            child: Icon(Icons.hourglass_top, color: Colors.red, size: 24.sp),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildItemDetails(
-    String proName,
-    String productSize,
-    String optionsText,
-    double price,
-    int quantity,
-    double itemSubtotal,
-    double? optionPrice,
-    double? extraPrice,
-    bool itemCancelRequested,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          proName,
-          style: styles(
-            fontSize: 14.sp,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-        ),
-        if (productSize.isNotEmpty) ...[
-          SizedBox(height: 2.h),
-          Text(
-            'Size: $productSize',
-            style: styles(fontSize: 12.sp, color: Colors.black45),
-          ),
-        ],
-        if (optionsText.isNotEmpty) ...[
-          SizedBox(height: 2.h),
-          Text(
-            optionsText,
-            style: styles(fontSize: 11.sp, color: Colors.black45),
-          ),
-        ],
-        SizedBox(height: 4.h),
-        Row(
-          children: [
-            Text(
-              '฿${price.toStringAsFixed(2)} x $quantity',
-              style: styles(fontSize: 12.sp, color: Colors.black45),
-            ),
-            Spacer(),
-            Text(
-              '= ฿${itemSubtotal.toStringAsFixed(2)}',
-              style: styles(
-                fontSize: 13.sp,
-                color: Colors.deepOrange,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        if (extraPrice != null && extraPrice > 0) ...[
-          Row(
-            children: [
-              Text(
-                'Extra: ฿$optionPrice x $quantity',
-                style: styles(fontSize: 12.sp, color: Colors.orange),
-              ),
-              Spacer(),
-              Text(
-                '= ฿${extraPrice.toStringAsFixed(2)}',
-                style: styles(fontSize: 12.sp, color: Colors.orange),
-              ),
-            ],
-          ),
-        ],
-        if (itemCancelRequested) ...[
-          Padding(
-            padding: EdgeInsets.only(top: 4.h),
-            child: Row(
-              children: [
-                Icon(Icons.hourglass_top, size: 20.sp, color: Colors.red),
-                SizedBox(width: 4.w),
-                Text(
-                  'ขอยกเลิกรายการนี้',
-                  style: styles(fontSize: 12.sp, color: Colors.red),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Future<void> _handleAccept(
-    String orderId,
-    int rawIndex,
-    String proName,
-  ) async {
-    print(
-      '=== DEBUG ACCEPT PRESSED === Order $orderId, Raw Index $rawIndex, Item: $proName',
-    );
-    if (rawIndex < 0 || rawIndex >= itemsRaw.length) {
-      Fluttertoast.showToast(msg: 'Invalid item index: $rawIndex');
-      return;
-    }
-    bool orderDelivered = false;
-    try {
-      await firestore.runTransaction(
-        (tx) async =>
-            orderDelivered = await _processAccept(tx, orderId, rawIndex),
-      );
-      Fluttertoast.showToast(
-        msg: orderDelivered
-            ? 'Order delivered! All items accepted.'
-            : 'Item accepted and ready for delivery',
-      );
-    } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'Accept failed: $e',
-        backgroundColor: Colors.red,
-      );
-    }
-  }
-
-  Future<void> _handleApproveCancel(
-    String orderId,
-    int rawIndex,
-    String proName,
-  ) async {
-    print(
-      '=== DEBUG APPROVE CANCEL PRESSED === Order $orderId, Raw Index $rawIndex, Item: $proName',
-    );
-    if (rawIndex < 0 || rawIndex >= itemsRaw.length) {
-      Fluttertoast.showToast(msg: 'Invalid item index: $rawIndex');
-      return;
-    }
-    EasyLoading.show(status: 'Approving cancel...');
-    try {
-      await _processCancel(orderId, rawIndex, isApprove: true);
-      Fluttertoast.showToast(
-        msg: 'Item cancel approved',
-        backgroundColor: Colors.orange,
-      );
-    } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'Approve cancel failed: $e',
-        backgroundColor: Colors.red,
-      );
-    } finally {
-      EasyLoading.dismiss();
-    }
-  }
-
-  Future<void> _handleCancel(
-    String orderId,
-    int rawIndex,
-    String proName,
-  ) async {
-    print(
-      '=== DEBUG VENDOR CANCEL PRESSED === Order $orderId, Raw Index $rawIndex, Item: $proName',
-    );
-    if (rawIndex < 0 || rawIndex >= itemsRaw.length) {
-      Fluttertoast.showToast(msg: 'Invalid item index: $rawIndex');
-      return;
-    }
-    EasyLoading.show(status: 'Cancelling item...');
-    try {
-      await _processCancel(orderId, rawIndex, isApprove: false);
-      Fluttertoast.showToast(
-        msg: 'Item cancelled by vendor',
-        backgroundColor: Colors.orange,
-      );
-    } catch (e) {
-      Fluttertoast.showToast(
-        msg: 'Cancel failed: $e',
-        backgroundColor: Colors.red,
-      );
-    } finally {
-      EasyLoading.dismiss();
-    }
-  }
-
-  Future<bool> _processAccept(
-    Transaction tx,
-    String orderId,
-    int rawIndex,
-  ) async {
-    final docRef = firestore.collection('orders').doc(orderId);
-    final snap = await tx.get(docRef);
-    if (!snap.exists) throw Exception('Order not found');
-
-    final data = snap.data() as Map;
-    final itemsList = List.from(data['items'] ?? []);
-    final serviceType = data['serviceType']?.toString() ?? 'pickup';
-    final shippingCharge = (data['shippingCharge'] as num?)?.toDouble() ?? 0.0;
-
-    if (rawIndex >= 0 && rawIndex < itemsList.length) {
-      final targetItem = Map<String, dynamic>.from(itemsList[rawIndex]);
-      targetItem['cancelRequested'] = false;
-      targetItem['accepted'] = true;
-      itemsList[rawIndex] = targetItem;
-
-      // Deduct stock
-      final proId = targetItem['proId']?.toString() ?? '';
-      final iQty = (targetItem['quantity'] as num?)?.toInt() ?? 1;
-      if (proId.isNotEmpty) {
-        final prodRef = FirebaseFirestore.instance
-            .collection('products')
-            .doc(proId);
-        final prodSnap = await tx.get(prodRef);
-        if (prodSnap.exists) {
-          final pqty = (prodSnap.data()?['pqty'] as num? ?? 0).toInt();
-          if (pqty < iQty) throw Exception('Insufficient stock');
-          tx.update(prodRef, {'pqty': pqty - iQty});
-        }
-      }
-
-      final (newPendingSubTotal, pendingCount, allAccepted) = _calcTotals(
-        itemsList,
-        serviceType,
-        shippingCharge,
-      );
-      final newTotalPrice = serviceType == 'delivery'
-          ? newPendingSubTotal + shippingCharge
-          : newPendingSubTotal;
-      final approveTime = Timestamp.now();
-      final updates = {
-        'items': itemsList,
-        'totalPrice': newTotalPrice,
-        'deliveredAt': approveTime,
-      };
-
-      if (pendingCount == 0) {
-        final newStatus = allAccepted ? 'delivered' : 'cancelled';
-        updates['status'] = newStatus;
-        if (newStatus == 'delivered')
-          updates['totalPrice'] = data['originalTotalPrice'] ?? newTotalPrice;
-        tx.update(docRef, updates);
-        print(
-          '=== DEBUG APPROVE TIME SET === Order $orderId: deliveredAt = $approveTime',
-        );
-        return newStatus == 'delivered';
-      }
-      tx.update(docRef, updates);
-      return false;
-    }
-    throw Exception('Invalid index $rawIndex');
-  }
-
-  Future<void> _processCancel(
-    String orderId,
-    int rawIndex, {
-    required bool isApprove,
-  }) async {
+  Future<void> _processRejectCancel(String orderId, List itemsRaw) async {
     await firestore.runTransaction((tx) async {
       final docRef = firestore.collection('orders').doc(orderId);
       final snap = await tx.get(docRef);
@@ -950,371 +589,67 @@ class PreparingItemWidget extends StatelessWidget {
       final shippingCharge =
           (data['shippingCharge'] as num?)?.toDouble() ?? 0.0;
 
-      if (rawIndex >= 0 && rawIndex < itemsList.length) {
-        final targetItem = Map<String, dynamic>.from(itemsList[rawIndex]);
-        targetItem['cancelled'] = true;
-        if (isApprove) targetItem['cancelRequested'] = false;
-        itemsList[rawIndex] = targetItem;
+      bool insufficientStock = false;
+      for (int i = 0; i < itemsList.length; i++) {
+        final it = Map<String, dynamic>.from(itemsList[i]);
+        final accepted = it['accepted'] ?? false;
+        final cancelled = it['cancelled'] ?? false;
+        if (!accepted && !cancelled) {
+          // Accept the item
+          it['accepted'] = true;
+          it['cancelRequested'] = false;
 
-        final (newPendingSubTotal, pendingCount, allAccepted) = _calcTotals(
-          itemsList,
-          serviceType,
-          shippingCharge,
-        );
-        final newTotalPrice = serviceType == 'delivery'
-            ? newPendingSubTotal + shippingCharge
-            : newPendingSubTotal;
-        final updates = {'items': itemsList, 'totalPrice': newTotalPrice};
-
-        if (pendingCount == 0) {
-          final newStatus = allAccepted ? 'delivered' : 'cancelled';
-          updates['status'] = newStatus;
-        }
-        tx.update(docRef, updates);
-      } else {
-        throw Exception('Invalid index $rawIndex');
-      }
-    });
-  }
-
-  (double, int, bool) _calcTotals(
-    List itemsList,
-    String serviceType,
-    double shippingCharge,
-  ) {
-    double subTotal = 0.0;
-    int pendingCount = 0;
-    bool allAccepted = true;
-    for (final it in itemsList) {
-      final accepted = it['accepted'] ?? false;
-      final cancelled = it['cancelled'] ?? false;
-      if (!accepted && !cancelled) {
-        final itPrice = (it['price'] as num?)?.toDouble() ?? 0.0;
-        final itExtra = (it['extraPrice'] as num?)?.toDouble() ?? 0.0;
-        final itQty = (it['quantity'] as num?)?.toInt() ?? 1;
-        subTotal += (itPrice + itExtra) * itQty;
-        pendingCount++;
-      }
-      if (!accepted) allAccepted = false;
-    }
-    return (subTotal, pendingCount, allAccepted);
-  }
-}
-
-class BuyerDetailsWidget extends StatelessWidget {
-  final String buyerId;
-  final Map orderData;
-  final List<Map<String, dynamic>> items;
-  final String orderId;
-  final Function(String, String) onMarkRead;
-
-  const BuyerDetailsWidget({
-    super.key,
-    required this.buyerId,
-    required this.orderData,
-    required this.items,
-    required this.orderId,
-    required this.onMarkRead,
-  });
-
-  Widget _buildUnreadBadge(int unreadCount) {
-    if (unreadCount == 0) return const SizedBox.shrink();
-    return Positioned(
-      right: 0,
-      top: 0,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: unreadCount > 9 ? 4.w : 2.w,
-          vertical: 2.h,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.red,
-          borderRadius: BorderRadius.circular(10.r),
-        ),
-        child: Text(
-          unreadCount > 99 ? '99+' : '$unreadCount',
-          style: styles(
-            fontSize: unreadCount > 9 ? 9.sp : 10.sp,
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final orderEmail = orderData['custemail']?.toString() ?? '';
-    final orderBuyerImage = orderData['buyerImage']?.toString() ?? '';
-    final orderPhone = orderData['custphone']?.toString() ?? '';
-    final orderAddress = orderData['address']?.toString() ?? '';
-    final orderFullName = orderData['fullName']?.toString() ?? 'Unknown Buyer';
-    final defaultAvatarUrl =
-        'https://ui-avatars.com/api/?name=${Uri.encodeComponent(orderFullName)}&background=ff6b35&color=fff&size=128';
-
-    final String firstProId = items.isNotEmpty
-        ? items.first['proId']?.toString() ?? ''
-        : '';
-
-    print(
-      '=== DEBUG BADGE INPUT === Order $orderId: buyerId="$buyerId", firstProId="$firstProId", items count=${items.length}',
-    );
-
-    return GestureDetector(
-      onTap: () async {
-        if (items.isNotEmpty && firstProId.isNotEmpty) {
-          await onMarkRead(buyerId, firstProId);
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatdetailPage(
-                buyerId: buyerId,
-                vendorId: auth.currentUser!.uid,
-                proId: firstProId,
-                data: orderData,
-              ),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ไม่พบข้อมูลสินค้าเพื่อเริ่มแชท'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      },
-      child: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        future: buyerId.isNotEmpty
-            ? FirebaseFirestore.instance.collection('buyers').doc(buyerId).get()
-            : null,
-        builder: (context, buyerSnapshot) {
-          String email = orderEmail.isNotEmpty ? orderEmail : 'N/A';
-          String buyerImageUrl =
-              orderBuyerImage.isNotEmpty && orderBuyerImage != 'null'
-              ? orderBuyerImage
-              : defaultAvatarUrl;
-
-          if (buyerSnapshot.connectionState == ConnectionState.done) {
-            if (buyerSnapshot.hasData && buyerSnapshot.data!.exists) {
-              final buyerData =
-                  buyerSnapshot.data!.data() ?? <String, dynamic>{};
-              email = buyerData['email']?.toString() ?? email;
-              final buyerDocImage = buyerData['image']?.toString();
-              if (buyerDocImage != null &&
-                  buyerDocImage.isNotEmpty &&
-                  buyerDocImage != 'null')
-                buyerImageUrl = buyerDocImage;
+          // Deduct stock
+          final proId = it['proId']?.toString() ?? '';
+          final iQty = (it['quantity'] as num?)?.toInt() ?? 1;
+          if (proId.isNotEmpty && iQty > 0) {
+            final prodRef = firestore.collection('products').doc(proId);
+            final prodSnap = await tx.get(prodRef);
+            if (prodSnap.exists) {
+              final pqty = (prodSnap.data()?['pqty'] as num? ?? 0).toInt();
+              if (pqty < iQty) {
+                insufficientStock = true;
+                break;
+              }
+              tx.update(prodRef, {'pqty': pqty - iQty});
             }
           }
+          itemsList[i] = it;
+        }
+      }
 
-          return StreamBuilder<QuerySnapshot>(
-            stream: firstProId.isNotEmpty && buyerId.isNotEmpty
-                ? firestore
-                      .collection('chats')
-                      .where('vendorId', isEqualTo: auth.currentUser!.uid)
-                      .where('buyerId', isEqualTo: buyerId)
-                      .where('proId', isEqualTo: firstProId)
-                      .where('senderId', isEqualTo: buyerId)
-                      .where('read', isEqualTo: false)
-                      .snapshots()
-                : null,
-            builder: (context, chatSnapshot) {
-              int unreadCount = 0;
-              print(
-                '=== DEBUG UNREAD STREAM === Order $orderId: State=${chatSnapshot.connectionState}, HasData=${chatSnapshot.hasData}, HasError=${chatSnapshot.hasError}',
-              );
+      if (insufficientStock) {
+        throw Exception('สินค้าบางรายการสต็อกไม่พอ');
+      }
 
-              if (chatSnapshot.hasError) {
-                print('=== DEBUG UNREAD ERROR === ${chatSnapshot.error}');
-                unreadCount = -1; // Flag for error state
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Chat query error (check index): ${chatSnapshot.error}',
-                      ),
-                      backgroundColor: Colors.orange,
-                      duration: const Duration(seconds: 5),
-                    ),
-                  );
-                });
-              } else if (chatSnapshot.hasData) {
-                unreadCount = chatSnapshot.data!.docs.length;
-                print(
-                  '=== DEBUG UNREAD COUNT === Order $orderId: Found $unreadCount docs. Sample doc IDs: ${chatSnapshot.data!.docs.take(2).map((d) => d.id).toList()}',
-                );
-              } else if (firstProId.isEmpty || buyerId.isEmpty) {
-                print(
-                  '=== DEBUG UNREAD WARNING === Order $orderId: Stream null - proId="$firstProId", buyerId="$buyerId"',
-                );
-              }
+      // Calculate full subtotal for all accepted items
+      double fullSubTotal = 0.0;
+      for (final it in itemsList) {
+        final accepted = it['accepted'] ?? false;
+        if (accepted) {
+          final itPrice = (it['price'] as num?)?.toDouble() ?? 0.0;
+          final itExtra = (it['extraPrice'] as num?)?.toDouble() ?? 0.0;
+          final itQty = (it['quantity'] as num?)?.toInt() ?? 1;
+          fullSubTotal += (itPrice + itExtra) * itQty;
+        }
+      }
+      final fullTotalPrice = serviceType == 'delivery'
+          ? fullSubTotal + shippingCharge
+          : fullSubTotal;
 
-              Widget avatarWithBadge;
-              if (unreadCount == -1) {
-                // Error badge (orange warning)
-                avatarWithBadge = Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 20.r,
-                      backgroundImage: buyerImageUrl.isNotEmpty
-                          ? NetworkImage(buyerImageUrl)
-                          : null,
-                      backgroundColor: Colors.grey.shade200,
-                      child: buyerImageUrl.isEmpty
-                          ? Icon(Icons.person, size: 20.r, color: Colors.grey)
-                          : null,
-                    ),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: EdgeInsets.all(2.w),
-                        decoration: BoxDecoration(
-                          color: Colors.orange,
-                          borderRadius: BorderRadius.circular(10.r),
-                        ),
-                        child: Icon(
-                          Icons.warning,
-                          size: 12.sp,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              } else {
-                avatarWithBadge = Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 20.r,
-                      backgroundImage: buyerImageUrl.isNotEmpty
-                          ? NetworkImage(buyerImageUrl)
-                          : null,
-                      backgroundColor: Colors.grey.shade200,
-                      child: buyerImageUrl.isEmpty
-                          ? Icon(Icons.person, size: 20.r, color: Colors.grey)
-                          : null,
-                    ),
-                    _buildUnreadBadge(unreadCount),
-                  ],
-                );
-              }
+      // Since all pending are now accepted, set to delivered
+      final updates = {
+        'items': itemsList,
+        'orderCancelRequested': false,
+        'status': 'delivered',
+        'deliveredAt': Timestamp.now(),
+        'totalPrice': fullTotalPrice,
+      };
 
-              return Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(16.w),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withAlpha(50),
-                  border: Border(
-                    top: BorderSide(color: Colors.orange.shade200),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'ข้อมูลผู้สั่งซื้อ',
-                      style: styles(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black54,
-                      ),
-                    ),
-                    SizedBox(height: 8.h),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        avatarWithBadge,
-                        SizedBox(width: 12.w),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                orderFullName,
-                                style: styles(
-                                  fontSize: 14.sp,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black54,
-                                ),
-                              ),
-                              if (orderAddress.isNotEmpty) ...[
-                                SizedBox(height: 4.h),
-                                Text(
-                                  orderAddress,
-                                  style: styles(
-                                    fontSize: 12.sp,
-                                    color: Colors.black54,
-                                  ),
-                                ),
-                              ],
-                              if (orderPhone.isNotEmpty) ...[
-                                SizedBox(height: 4.h),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.phone,
-                                      size: 16.sp,
-                                      color: Colors.green,
-                                    ),
-                                    SizedBox(width: 4.w),
-                                    Expanded(
-                                      child: Text(
-                                        orderPhone,
-                                        style: styles(
-                                          fontSize: 12.sp,
-                                          color: Colors.black54,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                              if (email != 'N/A') ...[
-                                SizedBox(height: 4.h),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.email,
-                                      size: 16.sp,
-                                      color: Colors.blue,
-                                    ),
-                                    SizedBox(width: 4.w),
-                                    Expanded(
-                                      child: Text(
-                                        email,
-                                        style: styles(
-                                          fontSize: 12.sp,
-                                          color: Colors.black54,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ] else if (orderPhone.isEmpty) ...[
-                                SizedBox(height: 4.h),
-                                Text(
-                                  'No contact details available',
-                                  style: styles(
-                                    fontSize: 12.sp,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
+      tx.update(docRef, updates);
+      print(
+        '=== DEBUG REJECT CANCEL SUCCESS === Order $orderId: Set to delivered',
+      );
+    });
   }
 }
