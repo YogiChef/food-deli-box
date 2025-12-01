@@ -8,7 +8,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:vendor_box/services/sevice.dart';
 
-class PreparingItemWidget extends StatelessWidget {
+class PreparingItemWidget extends StatefulWidget {
   final Map<String, dynamic> item;
   final String orderId;
   final List itemsRaw;
@@ -25,17 +25,84 @@ class PreparingItemWidget extends StatelessWidget {
   });
 
   @override
+  State<PreparingItemWidget> createState() => _PreparingItemWidgetState();
+}
+
+class _PreparingItemWidgetState extends State<PreparingItemWidget>
+    with TickerProviderStateMixin {
+  late SlidableController _slidableController;
+  bool _triggered = false;
+
+  // State fields สำหรับค่า item (ป้องกัน stale data)
+  late int rawIndex;
+  late bool itemCancelRequested;
+  late String proName;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateItemData();
+
+    _slidableController = SlidableController(this);
+    _slidableController.animation.addStatusListener(_onAnimationStatusChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant PreparingItemWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item != widget.item) {
+      _updateItemData();
+    }
+  }
+
+  void _updateItemData() {
+    rawIndex = widget.item['__rawIndex'] as int;
+    itemCancelRequested = widget.item['cancelRequested'] ?? false;
+    proName = widget.item['proName']?.toString() ?? '';
+  }
+
+  void _onAnimationStatusChanged(AnimationStatus status) {
+    print(
+      '=== DEBUG ANIMATION === Status: $status, Ratio: ${_slidableController.ratio}, Triggered: $_triggered',
+    );
+    if (status == AnimationStatus.completed &&
+        _slidableController.ratio >=
+            0.5 && // <-- ปรับเป็น 0.5 เพื่อ match log ของคุณ
+        !_triggered) {
+      print('=== TRIGGERING DIALOG ==='); // Debug: ต้องเห็น log นี้หลัง swipe
+      _triggered = true;
+      _showActionDialog(
+        context,
+        rawIndex,
+        itemCancelRequested,
+        proName,
+        widget.orderId,
+      );
+      _slidableController.close(); // Close หลัง show dialog
+    } else if (status == AnimationStatus.dismissed) {
+      print('=== RESET TRIGGER ===');
+      _triggered = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _slidableController.animation.removeStatusListener(
+      _onAnimationStatusChanged,
+    );
+    _slidableController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final rawIndex = item['__rawIndex'] as int;
-    final itemCancelRequested = item['cancelRequested'] ?? false;
-    final proName = item['proName']?.toString() ?? '';
-    final quantity = (item['quantity'] as num?)?.toInt() ?? 1;
-    final price = (item['price'] as num?)?.toDouble() ?? 0.0;
-    final optionPrice = (item['extraPrice'] as num?)?.toDouble();
+    final quantity = (widget.item['quantity'] as num?)?.toInt() ?? 1;
+    final price = (widget.item['price'] as num?)?.toDouble() ?? 0.0;
+    final optionPrice = (widget.item['extraPrice'] as num?)?.toDouble();
     final extraPrice =
-        ((item['extraPrice'] as num?)?.toDouble() ?? 0.0) * quantity;
-    final productSize = item['productSize']?.toString() ?? '';
-    final selectedOptions = (item['selectedOptions'] ?? [])
+        ((widget.item['extraPrice'] as num?)?.toDouble() ?? 0.0) * quantity;
+    final productSize = widget.item['productSize']?.toString() ?? '';
+    final selectedOptions = (widget.item['selectedOptions'] ?? [])
         .map((opt) => Map<String, dynamic>.from(opt ?? {}))
         .toList();
     final optionsText = selectedOptions
@@ -44,27 +111,35 @@ class PreparingItemWidget extends StatelessWidget {
               '${opt['name']?.toString()} (+฿${(opt['price'] as num?)?.toDouble() ?? 0})',
         )
         .join(', ');
-    final itemSubtotal = (price) * quantity;
-    final itemId = item['proId']?.toString() ?? 'unknown';
-    final productImage = (item['imageUrl'] as List?)?.isNotEmpty == true
-        ? item['imageUrl'].first.toString()
+    final itemSubtotal = price * quantity;
+    final itemId = widget.item['proId']?.toString() ?? 'unknown';
+    final productImage = (widget.item['imageUrl'] as List?)?.isNotEmpty == true
+        ? widget.item['imageUrl'].first.toString()
         : '';
 
     print(
-      '=== DEBUG ITEM BUILD === Order $orderId, UI Index: $uiIndex, Raw Index: $rawIndex, Item: $proName',
+      '=== DEBUG ITEM BUILD === Order ${widget.orderId}, UI Index: ${widget.uiIndex}, Raw Index: $rawIndex, Item: $proName',
     );
 
-    final actions = _buildActions(rawIndex, itemCancelRequested, proName);
-
     return Container(
-      key: ValueKey('$orderId-$itemId-$rawIndex'),
+      key: ValueKey('${widget.orderId}-$itemId-$rawIndex'),
       margin: EdgeInsets.only(bottom: 8.h),
       child: Slidable(
+        controller: _slidableController,
         closeOnScroll: true,
         direction: Axis.horizontal,
         startActionPane: ActionPane(
           motion: const ScrollMotion(),
-          children: actions,
+          children: [], // ว่าง OK แต่ ratio=0.5
+          // Optional: ถ้าต้องการ ratio=1.0 (open เต็ม) ให้เพิ่ม dummy action นี้
+          // children: [
+          //   SlidableAction(
+          //     onPressed: (context) {},  // ว่าง
+          //     backgroundColor: Colors.transparent,
+          //     foregroundColor: Colors.transparent,
+          //     flex: 1,
+          //   ),
+          // ],
         ),
         child: Padding(
           padding: EdgeInsets.all(16.w),
@@ -96,53 +171,6 @@ class PreparingItemWidget extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  List<Widget> _buildActions(
-    int rawIndex,
-    bool itemCancelRequested,
-    String proName,
-  ) {
-    if (itemCancelRequested) {
-      return [
-        SlidableAction(
-          flex: 2,
-          onPressed: (context) =>
-              _handleApproveCancel(orderId, rawIndex, proName),
-          backgroundColor: Colors.red,
-          foregroundColor: Colors.white,
-          icon: Icons.check,
-          label: 'Cancel',
-        ),
-        SlidableAction(
-          flex: 2,
-          onPressed: (context) => _handleAccept(orderId, rawIndex, proName),
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-          icon: Icons.check,
-          label: 'Accept',
-        ),
-      ];
-    } else {
-      return [
-        SlidableAction(
-          flex: 2,
-          onPressed: (context) => _handleAccept(orderId, rawIndex, proName),
-          backgroundColor: Colors.blue,
-          foregroundColor: Colors.white,
-          icon: Icons.check,
-          label: 'Accept',
-        ),
-        SlidableAction(
-          flex: 2,
-          onPressed: (context) => _handleCancel(orderId, rawIndex, proName),
-          backgroundColor: const Color(0xFFFE4A49),
-          foregroundColor: Colors.white,
-          icon: Icons.close,
-          label: 'Cancel',
-        ),
-      ];
-    }
   }
 
   Widget _buildImage(String productImage, bool itemCancelRequested) {
@@ -269,6 +297,87 @@ class PreparingItemWidget extends StatelessWidget {
     );
   }
 
+  Future<void> _showActionDialog(
+    BuildContext context,
+    int rawIndex,
+    bool itemCancelRequested,
+    String proName,
+    String orderId,
+  ) async {
+    if (!mounted) return;
+
+    List<Map<String, dynamic>> buttonConfigs = [];
+    if (itemCancelRequested) {
+      buttonConfigs = [
+        {'label': 'ยกเลิก', 'value': 'nothing', 'color': Colors.green},
+        {
+          'label': 'อนุมัติยกเลิก',
+          'value': 'approve_cancel',
+          'color': Colors.red,
+        },
+        {'label': 'รับสินค้า', 'value': 'accept', 'color': Colors.green},
+      ];
+    } else {
+      buttonConfigs = [
+        {'label': 'ยกเลิก', 'value': 'nothing', 'color': Colors.green},
+        {'label': 'ยืนยัน', 'value': 'confirm', 'color': Colors.blue},
+        {'label': 'ยกเลิกสินค้า', 'value': 'cancel_item', 'color': Colors.red},
+      ];
+    }
+
+    String? result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(itemCancelRequested ? 'จัดการคำขอ' : 'จัดการรายการ'),
+          content: Text(proName),
+          actions: buttonConfigs
+              .map(
+                (config) => TextButton(
+                  style: TextButton.styleFrom(foregroundColor: config['color']),
+                  onPressed: () => Navigator.of(context).pop(config['value']),
+                  child: Text(config['label']),
+                ),
+              )
+              .toList(),
+        );
+      },
+    );
+
+    switch (result) {
+      case 'confirm':
+      case 'accept':
+        await _handleAccept(orderId, rawIndex, proName);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('ยืนยันรับ "$proName" สำเร็จ')),
+          );
+        }
+        break;
+      case 'approve_cancel':
+        await _handleApproveCancel(orderId, rawIndex, proName);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('อนุมัติยกเลิก "$proName" สำเร็จ')),
+          );
+        }
+        break;
+      case 'cancel_item':
+        await _handleCancel(orderId, rawIndex, proName);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('ยกเลิกสินค้า "$proName" สำเร็จ')),
+          );
+        }
+        break;
+      case 'nothing':
+      default:
+        break;
+    }
+  }
+
+  // ... (คัดลอก _handleAccept, _handleApproveCancel, _handleCancel, _processAccept, _processCancel, _calcTotals จากโค้ดเดิมของคุณมาวางที่นี่ทั้งหมด – ไม่เปลี่ยน)
   Future<void> _handleAccept(
     String orderId,
     int rawIndex,
@@ -277,7 +386,7 @@ class PreparingItemWidget extends StatelessWidget {
     print(
       '=== DEBUG ACCEPT PRESSED === Order $orderId, Raw Index $rawIndex, Item: $proName',
     );
-    if (rawIndex < 0 || rawIndex >= itemsRaw.length) {
+    if (rawIndex < 0 || rawIndex >= widget.itemsRaw.length) {
       Fluttertoast.showToast(msg: 'Invalid item index: $rawIndex');
       return;
     }
@@ -308,7 +417,7 @@ class PreparingItemWidget extends StatelessWidget {
     print(
       '=== DEBUG APPROVE CANCEL PRESSED === Order $orderId, Raw Index $rawIndex, Item: $proName',
     );
-    if (rawIndex < 0 || rawIndex >= itemsRaw.length) {
+    if (rawIndex < 0 || rawIndex >= widget.itemsRaw.length) {
       Fluttertoast.showToast(msg: 'Invalid item index: $rawIndex');
       return;
     }
@@ -337,7 +446,7 @@ class PreparingItemWidget extends StatelessWidget {
     print(
       '=== DEBUG VENDOR CANCEL PRESSED === Order $orderId, Raw Index $rawIndex, Item: $proName',
     );
-    if (rawIndex < 0 || rawIndex >= itemsRaw.length) {
+    if (rawIndex < 0 || rawIndex >= widget.itemsRaw.length) {
       Fluttertoast.showToast(msg: 'Invalid item index: $rawIndex');
       return;
     }
