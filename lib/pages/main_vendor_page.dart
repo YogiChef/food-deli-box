@@ -129,78 +129,72 @@ class _MainVendorPageState extends State<MainVendorPage> {
     const StoreSettingsPage(),
   ];
 
-  Widget _buildMainBody() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _ordersStream,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasError) {
-          return Scaffold(
-            body: Center(child: Text('Error: ${snapshot.error}')),
-          );
-        }
-
-        final pendingCount = snapshot.data?.docs.length ?? 0;
-        return Scaffold(
-          bottomNavigationBar: BottomNavigationBar(
-            unselectedItemColor: Colors.grey,
-            currentIndex: _pageIndex,
-            selectedLabelStyle: GoogleFonts.righteous(fontSize: 16),
-            onTap: (value) => setState(() => _pageIndex = value),
-            selectedItemColor: mainColor,
-            items: [
-              BottomNavigationBarItem(
-                icon: Icon(
-                  _pageIndex == 0 ? IconlyBold.wallet : IconlyLight.wallet,
-                ),
-                label: 'Earnings',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(
-                  _pageIndex == 1 ? IconlyBold.upload : IconlyLight.upload,
-                ),
-                label: 'Upload',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(
-                  _pageIndex == 2 ? IconlyBold.edit : IconlyLight.edit,
-                ),
-                label: 'Edit',
-              ),
-              BottomNavigationBarItem(
-                icon: badges.Badge(
-                  showBadge: pendingCount == 0 ? false : true,
-                  badgeContent: Text(
-                    pendingCount.toString(),
-                    style: styles(color: Colors.white, fontSize: 12),
-                  ),
-                  child: Icon(
-                    _pageIndex == 3 ? IconlyBold.bag2 : IconlyLight.bag2,
-                  ),
-                ),
-                label: 'Orders',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(
-                  _pageIndex == 4 ? IconlyBold.setting : IconlyLight.setting,
-                ),
-                label: 'Settings',
-              ),
-            ],
+  // FIXED: แยก _buildTabBody เพื่อ avoid nested Scaffold ใน StreamBuilder
+  Widget _buildTabBody(QuerySnapshot? ordersSnapshot) {
+    final pendingCount = ordersSnapshot?.docs.length ?? 0;
+    return Scaffold(
+      bottomNavigationBar: BottomNavigationBar(
+        unselectedItemColor: Colors.grey,
+        currentIndex: _pageIndex,
+        selectedLabelStyle: GoogleFonts.righteous(fontSize: 16),
+        onTap: (value) => setState(() => _pageIndex = value),
+        selectedItemColor: mainColor,
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(
+              _pageIndex == 0 ? IconlyBold.wallet : IconlyLight.wallet,
+            ),
+            label: 'Earnings',
           ),
-          body: _page[_pageIndex],
-        );
-      },
+          BottomNavigationBarItem(
+            icon: Icon(
+              _pageIndex == 1 ? IconlyBold.upload : IconlyLight.upload,
+            ),
+            label: 'Upload',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(_pageIndex == 2 ? IconlyBold.edit : IconlyLight.edit),
+            label: 'Edit',
+          ),
+          BottomNavigationBarItem(
+            icon: badges.Badge(
+              showBadge: pendingCount == 0 ? false : true,
+              badgeContent: Text(
+                pendingCount.toString(),
+                style: styles(color: Colors.white, fontSize: 12),
+              ),
+              child: Icon(_pageIndex == 3 ? IconlyBold.bag2 : IconlyLight.bag2),
+            ),
+            label: 'Orders',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(
+              _pageIndex == 4 ? IconlyBold.setting : IconlyLight.setting,
+            ),
+            label: 'Settings',
+          ),
+        ],
+      ),
+      body: IndexedStack(
+        // FIXED: ใช้ IndexedStack เพื่อ keep state ของ tabs (prevent rebuild infinite) + avoid unbounded height
+        index: _pageIndex,
+        children: _page
+            .map(
+              (
+                page,
+              ) => // Wrap แต่ละ page ด้วย Expanded ถ้าจำเป็น (แต่ IndexedStack handle)
+              Expanded(
+                child: page,
+              ), // FIXED: Bound height สำหรับแต่ละ tab page
+            )
+            .toList(),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // ใหม่: ใช้ FutureBuilder สำหรับ initial vendor check (เร็วขึ้น, no nested stream)
+    // FIXED: FutureBuilder สำหรับ vendor check (ครั้งเดียว) + StreamBuilder สำหรับ orders ใน body (ไม่ nested Scaffold)
     return FutureBuilder<DocumentSnapshot>(
       future: firestore
           .collection('vendors')
@@ -242,12 +236,32 @@ class _MainVendorPageState extends State<MainVendorPage> {
           ); // Temp
         }
 
-        // ถ้า open: Start timer + แสดง body
+        // ถ้า open: Start timer + แสดง body ด้วย StreamBuilder สำหรับ orders (body เท่านั้น, ไม่ Scaffold)
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => _startCloseCheckTimer(vendorsModel),
         );
 
-        return _buildMainBody(); // Orders Stream แยก (real-time แต่ไม่ nested)
+        return StreamBuilder<QuerySnapshot>(
+          // FIXED: StreamBuilder สำหรับ orders เท่านั้น (ไม่ return Scaffold)
+          stream: _ordersStream,
+          builder: (context, ordersSnapshot) {
+            if (ordersSnapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (ordersSnapshot.hasError) {
+              return Scaffold(
+                body: Center(
+                  child: Text('Error loading orders: ${ordersSnapshot.error}'),
+                ), // FIXED: Show error
+              );
+            }
+            return _buildTabBody(
+              ordersSnapshot.data,
+            ); // Pass snapshot to buildTabBody (Scaffold อยู่ที่นี่)
+          },
+        );
       },
     );
   }

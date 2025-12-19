@@ -7,7 +7,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vendor_box/auth/landing_page.dart';
-import 'package:vendor_box/auth/vendor_registor_page.dart';
+import 'package:vendor_box/auth/registor/vendor_registor_page.dart';
 import 'package:vendor_box/services/sevice.dart';
 import 'package:vendor_box/widgets/button_widget.dart';
 import 'package:vendor_box/widgets/input_textfield.dart';

@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:vendor_box/auth/registor/store_location_page.dart';
 import 'package:vendor_box/models/vendor_model.dart';
 import 'package:vendor_box/pages/main_vendor_page.dart';
 import 'package:vendor_box/auth/vendor_auth.dart';
@@ -109,6 +110,15 @@ class _LandingPageState extends State<LandingPage> {
 
               if (vendorsModel.approved == true) {
                 print('Approved – isOpenNow = $isOpenNow');
+                if (vendorsModel.location == null) {
+                  print(
+                    'Approved but no location – Going to StoreLocationPage',
+                  );
+                  _timer?.cancel();
+                  _countdownTimer?.cancel();
+                  _resetCountdown();
+                  return const StoreLocationPage(); // ไปปักหมุดก่อนทุกอย่าง
+                }
                 if (!isOpenNow) {
                   print('Not open now – Showing closed UI + Starting timers');
                   _startAutoCheckTimer(

@@ -7,6 +7,7 @@ import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:vendor_box/controllers/vendor_controller.dart';
 import 'package:vendor_box/models/vendor_model.dart';
+import 'package:vendor_box/pages/edit_profile_page.dart';
 import 'package:vendor_box/pages/nav_pages/logout.dart';
 import 'package:vendor_box/pages/main_vendor_page.dart';
 import 'package:vendor_box/services/sevice.dart';
@@ -347,6 +348,20 @@ class _StoreSettingsPageState extends State<StoreSettingsPage> {
             bottomRight: Radius.circular(12.0),
           ),
           child: AppBar(
+            leading: Padding(
+              padding: EdgeInsets.only(left: 12.0.w),
+              child: IconButton(
+                icon: Icon(IconlyLight.profile, size: 24.w),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const VendorProfileEditPage(),
+                    ),
+                  );
+                },
+              ),
+            ),
             title: Text(
               'ตั้งค่าเวลาร้านค้า',
               style: styles(

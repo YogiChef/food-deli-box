@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:vendor_box/auth/registor/store_location_page.dart';
 import 'package:vendor_box/pages/vendor_chat_page.dart';
 import 'package:vendor_box/services/sevice.dart';
 
@@ -95,19 +96,27 @@ class _EarningPageState extends State<EarningPage> {
                       ],
                     ),
                   ),
-                  hour >= 12 && hour < 18
-                      ? Image.asset(
-                          'images/cloud.png',
-                          width: 40.w,
-                          height: 40.h,
-                        )
-                      : Image.asset(
-                          hour >= 6 && hour < 12
-                              ? 'images/sun.png'
-                              : 'images/moon.png',
-                          height: 40.h,
-                          width: 40.w,
-                        ),
+                  InkWell(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => StoreLocationPage(),
+                      ),
+                    ),
+                    child: hour >= 12 && hour < 18
+                        ? Image.asset(
+                            'images/pin.png',
+                            width: 32.w,
+                            height: 32.h,
+                          )
+                        : Image.asset(
+                            hour >= 6 && hour < 12
+                                ? 'images/pin.avif'
+                                : 'images/pin2.png',
+                            height: 32.h,
+                            width: 32.w,
+                          ),
+                  ),
                 ],
               ),
             ),

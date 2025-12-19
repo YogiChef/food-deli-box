@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class VendorModel {
   final bool? approved;
   final String vendorId;
@@ -19,6 +21,7 @@ class VendorModel {
   final Map<String, dynamic>?
   storeHours; // { 'monday': {'open': '09:00', 'close': '18:00', 'closed': false} }
   final bool temporarilyClosed; // ใหม่: สถานะปิดชั่วคราว (default false = เปิด)
+  final GeoPoint? location;
 
   VendorModel({
     this.approved,
@@ -40,6 +43,7 @@ class VendorModel {
     required this.promptPayId,
     this.storeHours,
     this.temporarilyClosed = false, // ใหม่: default false
+    this.location,
   });
 
   factory VendorModel.fromJson(Map<String, Object?> json) {
@@ -72,6 +76,7 @@ class VendorModel {
       promptPayId: json['promptPayId'] as String? ?? '',
       storeHours: json['storeHours'] as Map<String, dynamic>?,
       temporarilyClosed: json['temporarilyClosed'] as bool? ?? false, // ใหม่
+      location: json['location'] as GeoPoint?,
     );
   }
 
@@ -96,6 +101,7 @@ class VendorModel {
       'promptPayId': promptPayId,
       'storeHours': storeHours,
       'temporarilyClosed': temporarilyClosed, // ใหม่
+      if (location != null) 'location': location,
     };
   }
 }

@@ -1,3 +1,4 @@
+// Updated ChatdetailPage.dart - Added confirmation button for vendor on pending slips
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -51,281 +52,337 @@ class _ChatdetailPageState extends State<ChatdetailPage> {
     if (message.isNotEmpty) {
       await firestore.collection('chats').add({
         'proId': widget.proId,
+        'proName': widget.data['proName'] ?? 'Product', // Use from passed data
         'buyerName': (buyerDoc.data() as Map<String, dynamic>)['fullName'],
         'buyerPhoto': (buyerDoc.data() as Map<String, dynamic>)['profileImage'],
         'vendorPhoto': (vendorDoc.data() as Map<String, dynamic>)['image'],
         'buyerId': widget.buyerId,
         'vendorId': widget.vendorId,
         'message': message,
+        'messageType': 'text',
         'senderId': auth.currentUser!.uid,
-        'chatDate': DateTime.now(),
+        'chatDate': FieldValue.serverTimestamp(),
       });
-      setState(() {
-        _messageController.clear();
-      });
+      _messageController.clear();
     }
+  }
+
+  // Updated: Add confirmSlip function
+  Future<void> _confirmSlip(String chatDocId, String orderId) async {
+    try {
+      await firestore.collection('chats').doc(chatDocId).update({
+        'slipStatus': 'confirmed',
+      });
+      await firestore.collection('orders').doc(orderId).update({
+        'slipStatus': 'confirmed',
+        'status': 'paid', // Confirm payment
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ยืนยันสลิปสำเร็จ! ออร์เดอร์ได้รับการชำระเงินแล้ว'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการยืนยัน: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // FIXED: Helper to render message (text, image, or slip) with status and confirm button
+  Widget _buildMessageBubble(
+    Map<String, dynamic> data,
+    bool isVendorMessage,
+    String docId,
+  ) {
+    final String messageType = data['messageType'] ?? 'text';
+    final String? imageUrl = data['imageUrl'];
+    final String? orderId = data['orderId']; // For slip
+    final DateTime chatDate = (data['chatDate'] as Timestamp).toDate();
+    final String? slipStatus = data['slipStatus']; // New field
+
+    return Container(
+      // clipBehavior: Clip.hardEdge,
+      // margin: EdgeInsets.symmetric(horizontal: 12.w, vertical: 4.h),
+      // padding: EdgeInsets.all(12.w),
+      constraints: BoxConstraints(maxWidth: width * 0.6, minWidth: 40.w),
+      // decoration: BoxDecoration(
+      //   color: isVendorMessage ? Colors.blue.shade600 : Colors.grey.shade200,
+      //   borderRadius: BorderRadius.circular(6.r),
+      // ),
+      child: imageUrl!.isNotEmpty
+          ? InkWell(
+              onTap: () => _zoomSlip(imageUrl),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12.r),
+                child: Image.network(
+                  imageUrl,
+                  height: height * 0.5.h,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stack) => Container(
+                    height: 200.h,
+                    color: Colors.grey.shade300,
+                    child: Icon(Icons.error, color: Colors.red),
+                  ),
+                  loadingBuilder: (context, child, loading) => loading != null
+                      ? Center(child: CircularProgressIndicator())
+                      : child,
+                ),
+              ),
+            )
+          : SizedBox.shrink(),
+      // child: Column(
+      //   crossAxisAlignment: CrossAxisAlignment.start,
+      //   mainAxisSize: MainAxisSize.min,
+      //   children: [
+      //     // FIXED: Conditional render for text, image, or slip
+      //     if (messageType == 'slip') ...[
+      //       // Handle slip type with status
+      //       Row(
+      //         children: [
+      //           Icon(
+      //             Icons.receipt,
+      //             color: isVendorMessage ? Colors.amber : Colors.white70,
+      //             size: 16.sp,
+      //           ),
+      //           SizedBox(width: 4.w),
+      //           Expanded(
+      //             child: Column(
+      //               crossAxisAlignment: CrossAxisAlignment.start,
+      //               children: [
+      //                 Text(
+      //                   'สลิปการชำระเงิน',
+      //                   style: styles(
+      //                     color: isVendorMessage
+      //                         ? Colors.white
+      //                         : Colors.black87,
+      //                     fontSize: 14.sp,
+      //                     fontWeight: FontWeight.w600,
+      //                   ),
+      //                 ),
+      //                 if (slipStatus != null) ...[
+      //                   SizedBox(height: 2.h),
+      //                   Container(
+      //                     padding: EdgeInsets.symmetric(
+      //                       horizontal: 6.w,
+      //                       vertical: 2.h,
+      //                     ),
+      //                     decoration: BoxDecoration(
+      //                       color: slipStatus == 'pending'
+      //                           ? Colors.orange.shade100
+      //                           : Colors.green.shade100,
+      //                       borderRadius: BorderRadius.circular(10.r),
+      //                     ),
+      //                     child: Text(
+      //                       slipStatus == 'pending'
+      //                           ? 'รอการยืนยัน'
+      //                           : 'ยืนยันแล้ว',
+      //                       style: TextStyle(
+      //                         color: slipStatus == 'pending'
+      //                             ? Colors.orange.shade800
+      //                             : Colors.green.shade800,
+      //                         fontSize: 10.sp,
+      //                         fontWeight: FontWeight.w500,
+      //                       ),
+      //                     ),
+      //                   ),
+      //                 ],
+      //               ],
+      //             ),
+      //           ),
+      //           // Confirm button for vendor if pending and from buyer
+      //           if (!isVendorMessage &&
+      //               slipStatus == 'pending' &&
+      //               orderId != null) ...[
+      //             IconButton(
+      //               onPressed: () => _confirmSlip(docId, orderId),
+      //               icon: const Icon(
+      //                 Icons.check_circle,
+      //                 color: Colors.green,
+      //                 size: 20,
+      //               ),
+      //               tooltip: 'ยืนยันสลิป',
+      //             ),
+      //           ],
+      //         ],
+      //       ),
+      //       if (imageUrl!.isNotEmpty)
+      //         ClipRRect(
+      //           borderRadius: BorderRadius.circular(12.r),
+      //           child: Image.network(
+      //             imageUrl,
+      //             height: height * 0.45.h,
+      //             width: double.infinity,
+      //             fit: BoxFit.cover,
+      //             errorBuilder: (context, error, stack) => Container(
+      //               height: 200.h,
+      //               color: Colors.grey.shade300,
+      //               child: Icon(Icons.error, color: Colors.red),
+      //             ),
+      //             loadingBuilder: (context, child, loading) => loading != null
+      //                 ? Center(child: CircularProgressIndicator())
+      //                 : child,
+      //           ),
+      //         ),
+      //       if (data['message'] != null && data['message'].isNotEmpty)
+      //         Text(
+      //           data['message'],
+      //           style: styles(
+      //             color: isVendorMessage ? Colors.white70 : Colors.black54,
+      //             fontSize: 12.sp,
+      //           ),
+      //         ),
+      //     ] else if (messageType == 'text' || imageUrl == null)
+      //       Text(
+      //         data['message'],
+      //         style: styles(
+      //           color: isVendorMessage ? Colors.white : Colors.black87,
+      //           fontSize: 16.sp,
+      //           fontWeight: FontWeight.w400,
+      //         ),
+      //       )
+      //     else if (messageType == 'image' && imageUrl.isNotEmpty)
+      //       ClipRRect(
+      //         borderRadius: BorderRadius.circular(12.r),
+      //         child: Image.network(
+      //           imageUrl,
+      //           height: 200.h,
+      //           width: double.infinity,
+      //           fit: BoxFit.cover,
+      //           errorBuilder: (context, error, stack) => Container(
+      //             height: 200.h,
+      //             color: Colors.grey.shade300,
+      //             child: Icon(Icons.error, color: Colors.red),
+      //           ),
+      //           loadingBuilder: (context, child, loading) => loading != null
+      //               ? Center(child: CircularProgressIndicator())
+      //               : child,
+      //         ),
+      //       ),
+      //     SizedBox(height: 4.h),
+      //     Text(
+      //       DateFormat('dd/MM/yy kk:mm').format(chatDate),
+      //       style: styles(
+      //         fontSize: 11.sp,
+      //         color: isVendorMessage ? Colors.white70 : Colors.grey,
+      //       ),
+      //     ),
+      //   ],
+      // ),
+    );
+  }
+
+  void _zoomSlip(String url) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(title: Text('ดูสลิป')),
+          body: InteractiveViewer(child: Image.network(url)),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final String proName =
+        widget.data['proName'] ?? 'Chat Detail'; // From passed data
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Chat Screen',
-          style: styles(fontSize: 22.sp, fontWeight: FontWeight.w700),
+          proName,
+          style: styles(
+            fontSize: 20.sp,
+            fontWeight: FontWeight.bold,
+            color: Colors.black54,
+          ),
         ),
         centerTitle: true,
       ),
       body: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _chatStream,
-              builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-                if (snapshot.hasError) {
-                  return const Text('Something went wrong');
-                }
+              builder:
+                  (
+                    BuildContext context,
+                    AsyncSnapshot<QuerySnapshot> snapshot,
+                  ) {
+                    if (snapshot.hasError) {
+                      return const Text('Something went wrong');
+                    }
 
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                return SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListView(
-                        physics: const NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        reverse: true,
-                        children: snapshot.data!.docs.map((
-                          DocumentSnapshot document,
-                        ) {
-                          Map<String, dynamic> data =
-                              document.data()! as Map<String, dynamic>;
+                    return ListView.builder(
+                      reverse: false, // Bottom-aligned (new messages at bottom)
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: snapshot.data!.docs.length,
+                      itemBuilder: (context, index) {
+                        final document = snapshot.data!.docs[index];
+                        final data = document.data() as Map<String, dynamic>;
+                        final bool isVendorMessage =
+                            data['senderId'] == auth.currentUser!.uid;
+                        final String docId = document.id; // For update
 
-                          String senderId = data['senderId'];
-                          // bool isBuyer = senderId == widget.buyerId;
-                          // String senderType = isBuyer ? 'Buyer' : 'Seller';
-                          bool isVendorMessage =
-                              senderId == auth.currentUser!.uid;
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.start,
+                        return Padding(
+                          padding: EdgeInsets.only(bottom: 8.h),
+                          child: Row(
+                            mainAxisAlignment: isVendorMessage
+                                ? MainAxisAlignment
+                                      .end // Right-align for vendor (sender)
+                                : MainAxisAlignment
+                                      .start, // Left-align for buyer (receiver)
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              Padding(
-                                padding: EdgeInsets.only(
-                                  left: 12.w,
-                                  bottom: 12.h,
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    isVendorMessage
-                                        ? const SizedBox.shrink()
-                                        : CircleAvatar(
-                                            radius: 16.r,
-                                            backgroundImage: NetworkImage(
-                                              data['buyerPhoto'],
-                                            ),
-                                          ),
-                                    Flexible(
-                                      child: isVendorMessage
-                                          ? Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.end,
-                                              children: [
-                                                Align(
-                                                  alignment:
-                                                      Alignment.bottomRight,
-                                                  child: Container(
-                                                    clipBehavior: Clip.hardEdge,
-                                                    margin: EdgeInsets.only(
-                                                      right: 12.w,
-                                                    ),
-                                                    padding: EdgeInsets.only(
-                                                      left: 12.w,
-                                                      right: 12.w,
-                                                      top: 12.h,
-                                                      bottom: 6.h,
-                                                    ),
-                                                    constraints: BoxConstraints(
-                                                      maxWidth: width * 0.8,
-                                                      minWidth: 40.w,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          Colors.blue.shade600,
-                                                      borderRadius:
-                                                          BorderRadius.only(
-                                                            topLeft:
-                                                                Radius.circular(
-                                                                  20.r,
-                                                                ),
-                                                            bottomLeft:
-                                                                Radius.circular(
-                                                                  20.r,
-                                                                ),
-                                                            topRight:
-                                                                Radius.circular(
-                                                                  20.r,
-                                                                ),
-                                                          ),
-                                                    ),
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          data['message'],
-                                                          style: styles(
-                                                            color: Colors.white,
-                                                            fontSize: 16.sp,
-                                                            fontWeight:
-                                                                FontWeight.w400,
-                                                          ),
-                                                        ),
-                                                        10.w.verticalSpace,
-                                                        Text(
-                                                          DateFormat(
-                                                            'dd/MM/yy kk:mm',
-                                                          ).format(
-                                                            data['chatDate']
-                                                                .toDate(),
-                                                          ),
-                                                          textAlign:
-                                                              TextAlign.center,
-                                                          style: styles(
-                                                            fontSize: 11.sp,
-                                                            height: 1.2,
-                                                            color:
-                                                                Colors.white70,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            )
-                                          : Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Align(
-                                                  alignment:
-                                                      Alignment.bottomLeft,
-                                                  child: Container(
-                                                    clipBehavior: Clip.hardEdge,
-                                                    margin: EdgeInsets.only(
-                                                      left: 12.w,
-                                                    ),
-                                                    padding: EdgeInsets.only(
-                                                      left: 12.w,
-                                                      right: 12.w,
-                                                      top: 12.h,
-                                                      bottom: 6.h,
-                                                    ),
-                                                    constraints: BoxConstraints(
-                                                      maxWidth: width * 0.8,
-                                                      minWidth: 40.w,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color:
-                                                          Colors.grey.shade200,
-                                                      borderRadius:
-                                                          BorderRadius.only(
-                                                            topLeft:
-                                                                Radius.circular(
-                                                                  20.r,
-                                                                ),
-                                                            topRight:
-                                                                Radius.circular(
-                                                                  20.r,
-                                                                ),
-                                                            bottomRight:
-                                                                Radius.circular(
-                                                                  20.r,
-                                                                ),
-                                                          ),
-                                                    ),
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          data['message'],
-                                                          style: styles(
-                                                            color:
-                                                                Colors.black87,
-                                                            fontSize: 16.sp,
-                                                            fontWeight:
-                                                                FontWeight.w400,
-                                                          ),
-                                                        ),
-                                                        10.w.verticalSpace,
-                                                        Text(
-                                                          DateFormat(
-                                                            'dd/MM/yy kk:mm',
-                                                          ).format(
-                                                            data['chatDate']
-                                                                .toDate(),
-                                                          ),
-                                                          textAlign:
-                                                              TextAlign.center,
-                                                          style: styles(
-                                                            fontSize: 11.sp,
-                                                            height: 1.2,
-                                                            color: Colors.grey,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                              if (!isVendorMessage) ...[
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 8.0),
+                                  child: CircleAvatar(
+                                    radius: 16.r,
+                                    backgroundImage: NetworkImage(
+                                      data['buyerPhoto'] ?? '',
                                     ),
-                                  ],
+                                    onBackgroundImageError: (_, __) =>
+                                        Icon(Icons.person),
+                                  ),
                                 ),
-                              ),
-                              // Padding(
-                              //   padding: EdgeInsets.only(left: 70.w),
-                              //   child: Text('Sent by $senderType'),
-                              // ),
+                                SizedBox(width: 8.w),
+                              ],
+                              _buildMessageBubble(data, isVendorMessage, docId),
+                              if (isVendorMessage) ...[
+                                SizedBox(width: 8.w),
+                                CircleAvatar(
+                                  radius: 16.r,
+                                  backgroundImage: NetworkImage(
+                                    data['vendorPhoto'] ?? '',
+                                  ),
+                                  onBackgroundImageError: (_, __) =>
+                                      Icon(Icons.person),
+                                ),
+                              ],
                             ],
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                          ),
+                        );
+                      },
+                    );
+                  },
             ),
           ),
-          // Padding(
-          //   padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
-          //   child: Row(
-          //     children: [
-          //       Expanded(
-          //           child: TextField(
-          //         controller: _messageController,
-          //         decoration: const InputDecoration(hintText: 'Type a message'),
-          //       )),
-          //       IconButton(
-          //           onPressed: _sendMessage,
-          //           icon: const Icon(
-          //             Icons.send,
-          //             color: Colors.indigo,
-          //           ))
-          //     ],
-          //   ),
-          // )
-          70.verticalSpace,
+          70.h.verticalSpace,
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -353,8 +410,6 @@ class _ChatdetailPageState extends State<ChatdetailPage> {
               onPressed: _sendMessage,
               icon: const Icon(Icons.send, color: Colors.blue),
             ),
-            // filled: true,
-            // fillColor: Colors.green,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide: const BorderSide(
@@ -364,6 +419,7 @@ class _ChatdetailPageState extends State<ChatdetailPage> {
               ),
             ),
           ),
+          onFieldSubmitted: (_) => _sendMessage(),
         ),
       ),
     );

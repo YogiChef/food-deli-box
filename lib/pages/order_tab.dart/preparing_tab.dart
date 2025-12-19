@@ -9,7 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:vendor_box/services/sevice.dart';
 import 'package:vendor_box/pages/order_tab.dart/buyer_details_widget.dart';
-import 'package:vendor_box/widgets/preparing_item_widget.dart';
+import 'package:vendor_box/pages/order_tab.dart/preparing_item_widget.dart';
 
 class Preparing extends StatefulWidget {
   const Preparing({super.key});
@@ -51,6 +51,48 @@ class _PreparingState extends State<Preparing> {
     } catch (e) {
       print('=== DEBUG MARK READ ERROR === Error marking chats as read: $e');
     }
+  }
+
+  (
+    double pendingSubTotal,
+    int pendingItemCount,
+    int pendingQuantity,
+    double acceptedSubTotal,
+    int acceptedItemCount,
+    int acceptedQuantity,
+  )
+  _calcTotals(List itemsList, String serviceType) {
+    double pendingSubTotal = 0.0;
+    int pendingItemCount = 0;
+    int pendingQuantity = 0;
+    double acceptedSubTotal = 0.0;
+    int acceptedItemCount = 0;
+    int acceptedQuantity = 0;
+    for (final it in itemsList) {
+      final accepted = it['accepted'] ?? false;
+      final cancelled = it['cancelled'] ?? false;
+      final itPrice = (it['price'] as num?)?.toDouble() ?? 0.0;
+      final itExtra = (it['extraPrice'] as num?)?.toDouble() ?? 0.0;
+      final itQty = (it['quantity'] as num?)?.toInt() ?? 1;
+      if (!accepted && !cancelled) {
+        pendingSubTotal += (itPrice + itExtra) * itQty;
+        pendingItemCount++;
+        pendingQuantity += itQty;
+      }
+      if (accepted) {
+        acceptedSubTotal += (itPrice + itExtra) * itQty;
+        acceptedItemCount++;
+        acceptedQuantity += itQty;
+      }
+    }
+    return (
+      pendingSubTotal,
+      pendingItemCount,
+      pendingQuantity,
+      acceptedSubTotal,
+      acceptedItemCount,
+      acceptedQuantity,
+    );
   }
 
   @override
@@ -389,7 +431,7 @@ class _PreparingState extends State<Preparing> {
           backgroundColor: Colors.red,
           foregroundColor: Colors.white,
           icon: Icons.check,
-          label: 'เห็นด้วยกับคำขอยกเลิก',
+          label: 'ยกเลิกตามคำขอ',
         ),
         SlidableAction(
           flex: 3,
@@ -397,7 +439,7 @@ class _PreparingState extends State<Preparing> {
           backgroundColor: Colors.green,
           foregroundColor: Colors.white,
           icon: Icons.close,
-          label: 'ไม่ยินยอม',
+          label: 'ไม่สามารถยกเลิกได้',
         ),
       ];
     } else {
@@ -552,104 +594,145 @@ class _PreparingState extends State<Preparing> {
   }
 
   Future<void> _updateOrderCancel(
-    String orderId,
-    List itemsRaw, {
-    required bool isApprove,
-  }) async {
-    await firestore.runTransaction((tx) async {
-      final docRef = firestore.collection('orders').doc(orderId);
-      final snap = await tx.get(docRef);
-      if (snap.exists) {
-        final data = snap.data() as Map;
-        final List itemsList = List.from(data['items'] ?? []);
-        for (int i = 0; i < itemsList.length; i++) {
-          final it = Map<String, dynamic>.from(itemsList[i]);
-          if (!(it['accepted'] ?? false) && !(it['cancelled'] ?? false)) {
-            it['cancelled'] = true;
-            if (isApprove) it['cancelRequested'] = false;
-            itemsList[i] = it;
-          }
-        }
-        final updates = {'status': 'cancelled', 'items': itemsList};
-        if (isApprove) updates['orderCancelRequested'] = false;
-        tx.update(docRef, updates);
-      }
-    });
-  }
-
-  Future<void> _processRejectCancel(String orderId, List itemsRaw) async {
-    await firestore.runTransaction((tx) async {
-      final docRef = firestore.collection('orders').doc(orderId);
-      final snap = await tx.get(docRef);
-      if (!snap.exists) throw Exception('Order not found');
-
+  String orderId,
+  List itemsRaw, {
+  required bool isApprove,
+}) async {
+  await firestore.runTransaction((tx) async {
+    final docRef = firestore.collection('orders').doc(orderId);
+    final snap = await tx.get(docRef);
+    if (snap.exists) {
       final data = snap.data() as Map;
       final itemsList = List.from(data['items'] ?? []);
       final serviceType = data['serviceType']?.toString() ?? 'pickup';
-      final shippingCharge =
-          (data['shippingCharge'] as num?)?.toDouble() ?? 0.0;
+      final originalShippingCharge = (data['shippingCharge'] as num?)?.toDouble() ?? 0.0;  // FIXED: Use original shipping
 
-      bool insufficientStock = false;
       for (int i = 0; i < itemsList.length; i++) {
         final it = Map<String, dynamic>.from(itemsList[i]);
-        final accepted = it['accepted'] ?? false;
-        final cancelled = it['cancelled'] ?? false;
-        if (!accepted && !cancelled) {
-          // Accept the item
-          it['accepted'] = true;
-          it['cancelRequested'] = false;
-
-          // Deduct stock
-          final proId = it['proId']?.toString() ?? '';
-          final iQty = (it['quantity'] as num?)?.toInt() ?? 1;
-          if (proId.isNotEmpty && iQty > 0) {
-            final prodRef = firestore.collection('products').doc(proId);
-            final prodSnap = await tx.get(prodRef);
-            if (prodSnap.exists) {
-              final pqty = (prodSnap.data()?['pqty'] as num? ?? 0).toInt();
-              if (pqty < iQty) {
-                insufficientStock = true;
-                break;
-              }
-              tx.update(prodRef, {'pqty': pqty - iQty});
-            }
-          }
+        if (!(it['accepted'] ?? false) && !(it['cancelled'] ?? false)) {
+          it['cancelled'] = true;
+          if (isApprove) it['cancelRequested'] = false;
           itemsList[i] = it;
         }
       }
 
-      if (insufficientStock) {
-        throw Exception('สินค้าบางรายการสต็อกไม่พอ');
-      }
+      final (
+        pendingSubTotal,
+        pendingItemCount,
+        pendingQuantity,
+        acceptedSubTotal,
+        acceptedItemCount,
+        acceptedQuantity,
+      ) = _calcTotals(
+        itemsList,
+        serviceType,
+      );
 
-      // Calculate full subtotal for all accepted items
-      double fullSubTotal = 0.0;
-      for (final it in itemsList) {
-        final accepted = it['accepted'] ?? false;
-        if (accepted) {
-          final itPrice = (it['price'] as num?)?.toDouble() ?? 0.0;
-          final itExtra = (it['extraPrice'] as num?)?.toDouble() ?? 0.0;
-          final itQty = (it['quantity'] as num?)?.toInt() ?? 1;
-          fullSubTotal += (itPrice + itExtra) * itQty;
-        }
-      }
-      final fullTotalPrice = serviceType == 'delivery'
-          ? fullSubTotal + shippingCharge
-          : fullSubTotal;
+      // FIXED: Use original shipping for pending total
+      final newPendingTotal = pendingSubTotal + originalShippingCharge;
 
-      // Since all pending are now accepted, set to delivered
-      final updates = {
+      Map<String, dynamic> updates = {
         'items': itemsList,
-        'orderCancelRequested': false,
-        'status': 'delivered',
-        'deliveredAt': Timestamp.now(),
-        'totalPrice': fullTotalPrice,
+        'totalPrice': newPendingTotal,
+        // REMOVED: 'shippingCharge': newShipping (keep original)
       };
+      if (isApprove) updates['orderCancelRequested'] = false;
+
+      if (pendingItemCount == 0) {
+        if (acceptedItemCount > 0) {
+          // FIXED: Use original shipping for delivered total
+          final deliveredTotal = acceptedSubTotal + originalShippingCharge;
+          updates['status'] = 'delivered';
+          updates['totalPrice'] = deliveredTotal;
+          // REMOVED: 'shippingCharge': deliveredShipping (keep original)
+          updates['deliveredAt'] = Timestamp.now();
+        } else {
+          updates['status'] = 'cancelled';
+          updates['totalPrice'] = 0.0;
+          // REMOVED: 'shippingCharge': 0.0 (keep original)
+        }
+      } else {
+        updates['status'] = 'pending';
+      }
 
       tx.update(docRef, updates);
-      print(
-        '=== DEBUG REJECT CANCEL SUCCESS === Order $orderId: Set to delivered',
-      );
-    });
-  }
+    }
+  });
 }
+
+Future<void> _processRejectCancel(String orderId, List itemsRaw) async {
+  await firestore.runTransaction((tx) async {
+    final docRef = firestore.collection('orders').doc(orderId);
+    final snap = await tx.get(docRef);
+    if (!snap.exists) throw Exception('Order not found');
+
+    final data = snap.data() as Map;
+    final itemsList = List.from(data['items'] ?? []);
+    final serviceType = data['serviceType']?.toString() ?? 'pickup';
+    final originalShippingCharge = (data['shippingCharge'] as num?)?.toDouble() ?? 0.0;  // FIXED: Use original shipping
+
+    bool insufficientStock = false;
+    for (int i = 0; i < itemsList.length; i++) {
+      final it = Map<String, dynamic>.from(itemsList[i]);
+      final accepted = it['accepted'] ?? false;
+      final cancelled = it['cancelled'] ?? false;
+      if (!accepted && !cancelled) {
+        // Accept the item
+        it['accepted'] = true;
+        it['cancelRequested'] = false;
+
+        // Deduct stock
+        final proId = it['proId']?.toString() ?? '';
+        final iQty = (it['quantity'] as num?)?.toInt() ?? 1;
+        if (proId.isNotEmpty && iQty > 0) {
+          final prodRef = firestore.collection('products').doc(proId);
+          final prodSnap = await tx.get(prodRef);
+          if (prodSnap.exists) {
+            final pqty = (prodSnap.data()?['pqty'] as num? ?? 0).toInt();
+            if (pqty < iQty) {
+              insufficientStock = true;
+              break;
+            }
+            tx.update(prodRef, {'pqty': pqty - iQty});
+          }
+        }
+        itemsList[i] = it;
+      }
+    }
+
+    if (insufficientStock) {
+      throw Exception('สินค้าบางรายการสต็อกไม่พอ');
+    }
+
+    // Calculate full subtotal for all accepted items
+    final (
+      pendingSubTotal,
+      pendingItemCount,
+      pendingQuantity,
+      acceptedSubTotal,
+      acceptedItemCount,
+      acceptedQuantity,
+    ) = _calcTotals(
+      itemsList,
+      serviceType,
+    );
+
+    // FIXED: Use original shipping for full total
+    final fullTotalPrice = acceptedSubTotal + originalShippingCharge;
+
+    // Since all pending are now accepted, set to delivered
+    final updates = {
+      'items': itemsList,
+      'orderCancelRequested': false,
+      'status': 'delivered',
+      'deliveredAt': Timestamp.now(),
+      'totalPrice': fullTotalPrice,
+      // REMOVED: 'shippingCharge': newShipping (keep original)
+    };
+
+    tx.update(docRef, updates);
+    print(
+      '=== DEBUG REJECT CANCEL SUCCESS === Order $orderId: Set to delivered',
+    );
+  });
+}}

@@ -33,6 +33,8 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
   late SlidableController _slidableController;
   bool _triggered = false;
 
+  // ลบ late String productImage; ออก (ไม่ใช้ state field แล้ว)
+
   // State fields สำหรับค่า item (ป้องกัน stale data)
   late int rawIndex;
   late bool itemCancelRequested;
@@ -59,6 +61,7 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
     rawIndex = widget.item['__rawIndex'] as int;
     itemCancelRequested = widget.item['cancelRequested'] ?? false;
     proName = widget.item['proName']?.toString() ?? '';
+    // ลบ init productImage ที่นี่ (ย้ายไปคำนวณใน listener แล้ว)
   }
 
   void _onAnimationStatusChanged(AnimationStatus status) {
@@ -66,19 +69,28 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
       '=== DEBUG ANIMATION === Status: $status, Ratio: ${_slidableController.ratio}, Triggered: $_triggered',
     );
     if (status == AnimationStatus.completed &&
-        _slidableController.ratio >=
-            0.5 && // <-- ปรับเป็น 0.5 เพื่อ match log ของคุณ
+        _slidableController.ratio >= 0.5 &&
         !_triggered) {
-      print('=== TRIGGERING DIALOG ==='); // Debug: ต้องเห็น log นี้หลัง swipe
+      print('=== TRIGGERING DIALOG ===');
       _triggered = true;
+
+      // คำนวณ productImage ใหม่ที่นี่ (fresh, ป้องกัน late error)
+      final currentProductImage =
+          (widget.item['imageUrl'] as List?)?.isNotEmpty == true
+          ? widget.item['imageUrl'].first.toString()
+          : '';
+
+      print('=== DEBUG IMAGE URL === $currentProductImage'); // Debug: เช็ค URL
+
       _showActionDialog(
         context,
         rawIndex,
         itemCancelRequested,
         proName,
         widget.orderId,
+        currentProductImage, // ส่งค่า fresh ไป dialog
       );
-      _slidableController.close(); // Close หลัง show dialog
+      _slidableController.close();
     } else if (status == AnimationStatus.dismissed) {
       print('=== RESET TRIGGER ===');
       _triggered = false;
@@ -92,6 +104,48 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
     );
     _slidableController.dispose();
     super.dispose();
+  }
+
+  (
+    double pendingSubTotal,
+    int pendingItemCount,
+    int pendingQuantity,
+    double acceptedSubTotal,
+    int acceptedItemCount,
+    int acceptedQuantity,
+  )
+  _calcTotals(List itemsList, String serviceType) {
+    double pendingSubTotal = 0.0;
+    int pendingItemCount = 0;
+    int pendingQuantity = 0;
+    double acceptedSubTotal = 0.0;
+    int acceptedItemCount = 0;
+    int acceptedQuantity = 0;
+    for (final it in itemsList) {
+      final accepted = it['accepted'] ?? false;
+      final cancelled = it['cancelled'] ?? false;
+      final itPrice = (it['price'] as num?)?.toDouble() ?? 0.0;
+      final itExtra = (it['extraPrice'] as num?)?.toDouble() ?? 0.0;
+      final itQty = (it['quantity'] as num?)?.toInt() ?? 1;
+      if (!accepted && !cancelled) {
+        pendingSubTotal += (itPrice + itExtra) * itQty;
+        pendingItemCount++;
+        pendingQuantity += itQty;
+      }
+      if (accepted) {
+        acceptedSubTotal += (itPrice + itExtra) * itQty;
+        acceptedItemCount++;
+        acceptedQuantity += itQty;
+      }
+    }
+    return (
+      pendingSubTotal,
+      pendingItemCount,
+      pendingQuantity,
+      acceptedSubTotal,
+      acceptedItemCount,
+      acceptedQuantity,
+    );
   }
 
   @override
@@ -128,19 +182,7 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
         controller: _slidableController,
         closeOnScroll: true,
         direction: Axis.horizontal,
-        startActionPane: ActionPane(
-          motion: const ScrollMotion(),
-          children: [], // ว่าง OK แต่ ratio=0.5
-          // Optional: ถ้าต้องการ ratio=1.0 (open เต็ม) ให้เพิ่ม dummy action นี้
-          // children: [
-          //   SlidableAction(
-          //     onPressed: (context) {},  // ว่าง
-          //     backgroundColor: Colors.transparent,
-          //     foregroundColor: Colors.transparent,
-          //     flex: 1,
-          //   ),
-          // ],
-        ),
+        startActionPane: ActionPane(motion: const ScrollMotion(), children: []),
         child: Padding(
           padding: EdgeInsets.all(16.w),
           child: Row(
@@ -303,13 +345,14 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
     bool itemCancelRequested,
     String proName,
     String orderId,
+    String productImage, // <-- param ใหม่ (รับค่า fresh จาก listener)
   ) async {
     if (!mounted) return;
 
     List<Map<String, dynamic>> buttonConfigs = [];
     if (itemCancelRequested) {
       buttonConfigs = [
-        {'label': 'ยกเลิก', 'value': 'nothing', 'color': Colors.green},
+        {'label': 'ยกเลิก', 'value': 'nothing', 'color': Colors.blue},
         {
           'label': 'อนุมัติยกเลิก',
           'value': 'approve_cancel',
@@ -319,9 +362,13 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
       ];
     } else {
       buttonConfigs = [
-        {'label': 'ยกเลิก', 'value': 'nothing', 'color': Colors.green},
-        {'label': 'ยืนยัน', 'value': 'confirm', 'color': Colors.blue},
-        {'label': 'ยกเลิกสินค้า', 'value': 'cancel_item', 'color': Colors.red},
+        {'label': 'ยกเลิก', 'value': 'nothing', 'color': Colors.blue},
+        {'label': 'ยืนยัน', 'value': 'confirm', 'color': Colors.green},
+        {
+          'label': 'ยกเลิกสินค้า',
+          'value': 'cancel_item',
+          'color': Colors.deepOrange,
+        },
       ];
     }
 
@@ -330,17 +377,123 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(itemCancelRequested ? 'จัดการคำขอ' : 'จัดการรายการ'),
-          content: Text(proName),
-          actions: buttonConfigs
-              .map(
-                (config) => TextButton(
-                  style: TextButton.styleFrom(foregroundColor: config['color']),
-                  onPressed: () => Navigator.of(context).pop(config['value']),
-                  child: Text(config['label']),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(7.r),
+          ),
+          title: ClipRRect(
+            borderRadius: BorderRadius.circular(5.r),
+            child: Container(
+              width: width,
+              height: height * 0.2,
+              color: Colors.grey.shade200,
+              child: productImage.isNotEmpty
+                  ? Image.network(
+                      productImage,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(child: CircularProgressIndicator());
+                      },
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.image_not_supported,
+                        color: Colors.grey,
+                        size: 40.sp,
+                      ),
+                    )
+                  : Icon(Icons.image, color: Colors.grey, size: 40.sp),
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 12.h),
+              Center(
+                child: Text(
+                  itemCancelRequested ? 'ขอยกเลิก $proName' : proName,
+                  maxLines: 2,
+                  style: styles(
+                    fontSize: 16.sp,
+                    color: Colors.blue,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              )
-              .toList(),
+              ),
+
+              SizedBox(height: 12.h),
+            ],
+          ),
+          actions: <Widget>[
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4.w),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center, // เรียงตรงกลาง
+                children: buttonConfigs
+                    .where(
+                      (config) => config['value'] != 'nothing',
+                    ) // กรองยกเลิกออก
+                    .map(
+                      (config) => Container(
+                        height: 80.h,
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12.w,
+                          vertical: 12.h,
+                        ), // ช่องว่างระหว่างปุ่ม
+                        child: ElevatedButton.icon(
+                          icon: Icon(
+                            // เพิ่ม icon ที่เหมาะสมตาม action
+                            config['value'] == 'accept' ||
+                                    config['value'] == 'confirm'
+                                ? Icons.check_circle
+                                : Icons
+                                      .cancel_outlined, // หรือปรับ icon ตามต้องการ
+                            color: config['color'], // สี icon ตาม config
+                          ),
+                          label: Text(config['label']),
+                          style: ElevatedButton.styleFrom(
+                            foregroundColor: Colors.white, // สี text/icon
+                            backgroundColor:
+                                config['color'], // สีพื้นหลังตาม config (เช่น green/red)
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 16.w,
+                              vertical: 12.h,
+                            ), // ขนาดปุ่ม
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                8.r,
+                              ), // มุมโค้ง
+                            ),
+                            elevation: 2, // เงาเบา ๆ
+                          ),
+                          onPressed: () =>
+                              Navigator.of(context).pop(config['value']),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+            SizedBox(height: 8.h), // ช่องว่างก่อนปุ่มยกเลิก
+            // ปุ่มยกเลิก: อยู่ล่างสุด, ชิดขวา
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: EdgeInsets.only(right: 16.w),
+                child: TextButton(
+                  style: TextButton.styleFrom(foregroundColor: Colors.grey),
+                  onPressed: () => Navigator.of(context).pop('nothing'),
+                  child: Text(
+                    'ยกเลิก',
+                    style: styles(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -377,7 +530,6 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
     }
   }
 
-  // ... (คัดลอก _handleAccept, _handleApproveCancel, _handleCancel, _processAccept, _processCancel, _calcTotals จากโค้ดเดิมของคุณมาวางที่นี่ทั้งหมด – ไม่เปลี่ยน)
   Future<void> _handleAccept(
     String orderId,
     int rawIndex,
@@ -479,7 +631,9 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
     final data = snap.data() as Map;
     final itemsList = List.from(data['items'] ?? []);
     final serviceType = data['serviceType']?.toString() ?? 'pickup';
-    final shippingCharge = (data['shippingCharge'] as num?)?.toDouble() ?? 0.0;
+    final originalShippingCharge =
+        (data['shippingCharge'] as num?)?.toDouble() ??
+        0.0; // FIXED: Use original shipping
 
     if (rawIndex >= 0 && rawIndex < itemsList.length) {
       final targetItem = Map<String, dynamic>.from(itemsList[rawIndex]);
@@ -502,21 +656,35 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
         }
       }
 
-      final (pendingSubTotal, pendingCount, acceptedSubTotal, acceptedCount) =
-          _calcTotals(itemsList, serviceType, shippingCharge);
-      final newPendingTotal = serviceType == 'delivery'
-          ? pendingSubTotal + shippingCharge
-          : pendingSubTotal;
-      final approveTime = Timestamp.now();
-      final updates = {'items': itemsList, 'totalPrice': newPendingTotal};
+      final (
+        pendingSubTotal,
+        pendingItemCount,
+        pendingQuantity,
+        acceptedSubTotal,
+        acceptedItemCount,
+        acceptedQuantity,
+      ) = _calcTotals(
+        itemsList,
+        serviceType,
+      );
 
-      if (pendingCount == 0) {
-        if (acceptedCount > 0) {
-          final deliveredTotal = serviceType == 'delivery'
-              ? acceptedSubTotal + shippingCharge
-              : acceptedSubTotal;
+      // FIXED: Use original shipping for pending total
+      final newPendingTotal = pendingSubTotal + originalShippingCharge;
+
+      final approveTime = Timestamp.now();
+      final updates = {
+        'items': itemsList,
+        'totalPrice': newPendingTotal,
+        // REMOVED: 'shippingCharge': newShipping (keep original)
+      };
+
+      if (pendingItemCount == 0) {
+        if (acceptedItemCount > 0) {
+          // FIXED: Use original shipping for delivered total
+          final deliveredTotal = acceptedSubTotal + originalShippingCharge;
           updates['status'] = 'delivered';
           updates['totalPrice'] = deliveredTotal;
+          // REMOVED: 'shippingCharge': deliveredShipping (keep original)
           updates['deliveredAt'] = approveTime;
           tx.update(docRef, updates);
           print(
@@ -526,6 +694,7 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
         } else {
           updates['status'] = 'cancelled';
           updates['totalPrice'] = 0.0;
+          // REMOVED: 'shippingCharge': 0.0 (keep original, or set if needed)
           tx.update(docRef, updates);
           return false;
         }
@@ -549,8 +718,9 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
       final data = snap.data() as Map;
       final itemsList = List.from(data['items'] ?? []);
       final serviceType = data['serviceType']?.toString() ?? 'pickup';
-      final shippingCharge =
-          (data['shippingCharge'] as num?)?.toDouble() ?? 0.0;
+      final originalShippingCharge =
+          (data['shippingCharge'] as num?)?.toDouble() ??
+          0.0; // FIXED: Use original shipping
 
       if (rawIndex >= 0 && rawIndex < itemsList.length) {
         final targetItem = Map<String, dynamic>.from(itemsList[rawIndex]);
@@ -558,62 +728,48 @@ class _PreparingItemWidgetState extends State<PreparingItemWidget>
         if (isApprove) targetItem['cancelRequested'] = false;
         itemsList[rawIndex] = targetItem;
 
-        final (pendingSubTotal, pendingCount, acceptedSubTotal, acceptedCount) =
-            _calcTotals(itemsList, serviceType, shippingCharge);
-        final newPendingTotal = serviceType == 'delivery'
-            ? pendingSubTotal + shippingCharge
-            : pendingSubTotal;
-        final updates = {'items': itemsList, 'totalPrice': newPendingTotal};
+        final (
+          pendingSubTotal,
+          pendingItemCount,
+          pendingQuantity,
+          acceptedSubTotal,
+          acceptedItemCount,
+          acceptedQuantity,
+        ) = _calcTotals(
+          itemsList,
+          serviceType,
+        );
 
-        if (pendingCount == 0) {
-          if (acceptedCount > 0) {
-            final deliveredTotal = serviceType == 'delivery'
-                ? acceptedSubTotal + shippingCharge
-                : acceptedSubTotal;
+        // FIXED: Use original shipping for pending total
+        final newPendingTotal = pendingSubTotal + originalShippingCharge;
+
+        final updates = {
+          'items': itemsList,
+          'totalPrice': newPendingTotal,
+          // REMOVED: 'shippingCharge': newShipping (keep original)
+        };
+
+        if (pendingItemCount == 0) {
+          if (acceptedItemCount > 0) {
+            // FIXED: Use original shipping for delivered total
+            final deliveredTotal = acceptedSubTotal + originalShippingCharge;
             updates['status'] = 'delivered';
             updates['totalPrice'] = deliveredTotal;
+            // REMOVED: 'shippingCharge': deliveredShipping (keep original)
             updates['deliveredAt'] = Timestamp.now();
           } else {
             updates['status'] = 'cancelled';
             updates['totalPrice'] = 0.0;
+            // REMOVED: 'shippingCharge': 0.0 (keep original)
           }
+        } else {
+          updates['status'] = 'pending';
         }
+
         tx.update(docRef, updates);
       } else {
         throw Exception('Invalid index $rawIndex');
       }
     });
-  }
-
-  (
-    double pendingSubTotal,
-    int pendingCount,
-    double acceptedSubTotal,
-    int acceptedCount,
-  )
-  _calcTotals(List itemsList, String serviceType, double shippingCharge) {
-    double pendingSubTotal = 0.0;
-    int pendingCount = 0;
-    double acceptedSubTotal = 0.0;
-    int acceptedCount = 0;
-    for (final it in itemsList) {
-      final accepted = it['accepted'] ?? false;
-      final cancelled = it['cancelled'] ?? false;
-      if (!accepted && !cancelled) {
-        final itPrice = (it['price'] as num?)?.toDouble() ?? 0.0;
-        final itExtra = (it['extraPrice'] as num?)?.toDouble() ?? 0.0;
-        final itQty = (it['quantity'] as num?)?.toInt() ?? 1;
-        pendingSubTotal += (itPrice + itExtra) * itQty;
-        pendingCount++;
-      }
-      if (accepted) {
-        final itPrice = (it['price'] as num?)?.toDouble() ?? 0.0;
-        final itExtra = (it['extraPrice'] as num?)?.toDouble() ?? 0.0;
-        final itQty = (it['quantity'] as num?)?.toInt() ?? 1;
-        acceptedSubTotal += (itPrice + itExtra) * itQty;
-        acceptedCount++;
-      }
-    }
-    return (pendingSubTotal, pendingCount, acceptedSubTotal, acceptedCount);
   }
 }

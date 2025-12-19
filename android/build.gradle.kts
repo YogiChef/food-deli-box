@@ -5,7 +5,10 @@ allprojects {
     }
 }
 
-val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
+val newBuildDir: Directory =
+    rootProject.layout.buildDirectory
+        .dir("../../build")
+        .get()
 rootProject.layout.buildDirectory.value(newBuildDir)
 
 subprojects {
@@ -23,6 +26,9 @@ plugins {
   // ...
 
   // Add the dependency for the Google services Gradle plugin
-  id("com.google.gms.google-services") version "4.4.4" apply false
+    id("com.android.application") version "8.11.1" apply false  // FIXED: Update to latest compatible
+    id("org.jetbrains.kotlin.android") version "2.2.20" apply false  // Update Kotlin
+    id("com.google.gms.google-services") version "4.4.2" apply false
 
 }
+

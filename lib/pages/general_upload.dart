@@ -3,6 +3,7 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // ADD: สำหรับ reload user
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -566,6 +567,7 @@ class _GeneralTabState extends State<GeneralTab>
                           suffixText: '฿',
                         ),
                         validator: (value) {
+                          // FIXED: Add >5 check in validator
                           if (value!.isEmpty) {
                             return 'Please enter shipping charge';
                           }
@@ -754,9 +756,14 @@ class _GeneralTabState extends State<GeneralTab>
                           style: styles(color: Colors.white),
                           icon: Icons.save_as_rounded,
                           press: () async {
+                            // FIXED: Add user reload + better catch
                             if (_formKey.currentState!.validate()) {
                               // Form validate ก่อน
                               try {
+                                // Reload user token ก่อน save (fix stale auth)
+                                await FirebaseAuth.instance.currentUser
+                                    ?.reload();
+
                                 // Step 1: Upload images ถ้ามี
                                 if (_image.isNotEmpty) {
                                   EasyLoading.show(
@@ -785,6 +792,9 @@ class _GeneralTabState extends State<GeneralTab>
                                   }
 
                                   if (uploadedUrls.isNotEmpty) {
+                                    // FIXED: Clear ถ้า edit + append new
+                                    if (widget.proId != null)
+                                      _imageUrlList.clear();
                                     _imageUrlList.addAll(uploadedUrls);
                                     provider.getFormData(
                                       imageUrlList: _imageUrlList,
@@ -796,13 +806,28 @@ class _GeneralTabState extends State<GeneralTab>
                                   EasyLoading.dismiss();
                                 }
 
-                                // Step 2: Save product
+                                // Step 2: Save product (provider จัดการ error แล้ว)
                                 await provider.saveProduct(context);
                               } catch (e) {
-                                Fluttertoast.showToast(
-                                  msg: e.toString(),
-                                  backgroundColor: Colors.red,
-                                );
+                                EasyLoading.dismiss(); // Ensure dismiss
+                                print(
+                                  '=== GENERAL SAVE ERROR === $e',
+                                ); // Extra log
+                                // Provider toast แล้ว, แต่ add specific
+                                if (e.toString().contains(
+                                  'PERMISSION_DENIED',
+                                )) {
+                                  Fluttertoast.showToast(
+                                    msg:
+                                        'ไม่มีสิทธิ์บันทึกสินค้า ตรวจสอบการอนุมัติ',
+                                    backgroundColor: Colors.red,
+                                  );
+                                } else {
+                                  Fluttertoast.showToast(
+                                    msg: e.toString(),
+                                    backgroundColor: Colors.red,
+                                  );
+                                }
                               }
                             }
                           },

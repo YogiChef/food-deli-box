@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider;
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:vendor_box/auth/vendor_registor_page.dart';
+import 'package:vendor_box/auth/registor/vendor_registor_page.dart';
 import 'package:vendor_box/models/vendor_model.dart';
 import 'package:vendor_box/pages/main_vendor_page.dart';
 import 'package:vendor_box/services/sevice.dart';

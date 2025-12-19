@@ -15,7 +15,9 @@ class VendorChatPage extends StatelessWidget {
     final Stream<QuerySnapshot> _vendorChatStream = firestore
         .collection('chats')
         .where('vendorId', isEqualTo: auth.currentUser!.uid)
+        .orderBy('chatDate', descending: true)
         .snapshots();
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -34,116 +36,88 @@ class VendorChatPage extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          Map<String, String> lastProductBuyerId = {};
-          return ListView.builder(
-            itemCount: snapshot.data!.docs.length,
+
+          // FIXED: Group by buyerId + proId to show unique chats (last message only)
+          Map<String, DocumentSnapshot> lastChats = {};
+          for (var doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            if (data['senderId'] != auth.currentUser!.uid) {
+              // Only buyer messages
+              final key = '${data['buyerId']}_${data['proId']}';
+              lastChats[key] = doc;
+            }
+          }
+
+          return ListView.separated(
+            itemCount: lastChats.length,
+            separatorBuilder: (context, index) => Divider(height: 1.h),
             itemBuilder: (context, index) {
-              DocumentSnapshot documentSnapshot = snapshot.data!.docs[index];
+              final entry = lastChats.entries.elementAt(index);
+              final doc = entry.value;
+              final data = doc.data() as Map<String, dynamic>;
+              final String proId = data['proId'];
+              final String buyerId = data['buyerId'];
+              final String messageType = data['messageType'] ?? 'text';
+              final String? imageUrl =
+                  data['imageUrl']; // FIXED: Check imageUrl
+              // FIXED: Handle 'slip' preview
+              final String preview = messageType == 'slip'
+                  ? 'สลิปการชำระเงิน'
+                  : (messageType == 'image' && imageUrl != null
+                        ? '📷 รูปภาพ'
+                        : data['message']);
 
-              Map<String, dynamic> data =
-                  documentSnapshot.data()! as Map<String, dynamic>;
-
-              String message = data['message'].toString();
-              String senderId = data['senderId'].toString();
-              String proId = data['proId'].toString();
-
-              bool isSellerMessage = senderId == auth.currentUser!.uid;
-
-              if (!isSellerMessage) {
-                String key = '${senderId}_$proId';
-                if (!lastProductBuyerId.containsKey(key)) {
-                  lastProductBuyerId[key] = proId;
-
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ChatdetailPage(
-                            buyerId: data['buyerId'],
-                            vendorId: auth.currentUser!.uid,
-                            proId: proId,
-                            data: data,
-                          ),
+              return ListTile(
+                leading: CircleAvatar(
+                  radius: 20.r,
+                  backgroundImage: NetworkImage(data['buyerPhoto'] ?? ''),
+                  onBackgroundImageError: (_, __) => Icon(Icons.person),
+                ),
+                title: Text(
+                  'Order #${proId.substring(0, 8)}',
+                ), // Or use proName from data
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      preview.length > 50
+                          ? '${preview.substring(0, 50)}...'
+                          : preview,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    // FIXED: Show small image for both 'image' and 'slip'
+                    if ((messageType == 'image' || messageType == 'slip') &&
+                        imageUrl != null)
+                      SizedBox(
+                        height: 60.h,
+                        child: Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stack) =>
+                              Icon(Icons.broken_image, size: 20.r),
                         ),
-                      );
-                    },
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: EdgeInsets.only(
-                              left: 12.w,
-                              top: 6.h,
-                              bottom: 12.h,
-                            ),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 20.r,
-                                  backgroundImage: NetworkImage(
-                                    data['buyerPhoto'],
-                                  ),
-                                ),
-                                Container(
-                                  margin: EdgeInsets.only(left: 12.w),
-                                  padding: EdgeInsets.only(
-                                    left: 12.w,
-                                    right: 12.w,
-                                    top: 12.h,
-                                    bottom: 6.h,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.shade600,
-                                    borderRadius: BorderRadius.only(
-                                      topLeft: Radius.circular(20.r),
-                                      bottomRight: Radius.circular(20.r),
-                                      topRight: Radius.circular(20.r),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        message,
-                                        style: styles(
-                                          color: Colors.white,
-                                          letterSpacing: 1,
-                                          fontSize: 16.sp,
-                                          fontWeight: FontWeight.w400,
-                                        ),
-                                      ),
-                                      8.w.verticalSpace,
-                                      Text(
-                                        DateFormat(
-                                          'dd/MM/yy kk:mm',
-                                        ).format(data['chatDate'].toDate()),
-                                        textAlign: TextAlign.center,
-                                        style: styles(
-                                          fontSize: 11.sp,
-                                          height: 1.2,
-                                          color: Colors.white70,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Padding(
-                          //   padding: EdgeInsets.only(left: 70.w),
-                          //   child: Text('Sent by $senderType'),
-                          // ),
-                        ],
+                      ),
+                  ],
+                ),
+                trailing: Text(
+                  DateFormat('HH:mm').format(data['chatDate'].toDate()),
+                  style: styles(fontSize: 12.sp, color: Colors.grey),
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatdetailPage(
+                        buyerId: buyerId,
+                        vendorId: auth.currentUser!.uid,
+                        proId: proId,
+                        data: data,
                       ),
                     ),
                   );
-                }
-              }
-              return const SizedBox.shrink();
+                },
+              );
             },
           );
         },
